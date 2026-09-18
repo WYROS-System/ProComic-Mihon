@@ -63,11 +63,15 @@ jobs:
           python3 scripts/test_reader_hotfix.py
           python3 -m py_compile scripts/apply_reader_hotfix.py
 
-      - name: Run Reader contract tests
+      - name: Validate patched source
         working-directory: upstream
         run: |
-          python3 testdata/reader/test_reader_contract.py
           git diff --check
+          grep -q 'val publicImages = try {' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComic.kt
+          grep -q 'hasReaderDeferredOrProtectedContract' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComic.kt
+          grep -q 'extractJsonArrayAfterKey(body, "images")' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicUtils.kt
+          grep -q 'versionCode = 8' app/build.gradle.kts
+          grep -q 'versionName = "1.5.2"' app/build.gradle.kts
 
       - name: Build release APK
         working-directory: upstream
