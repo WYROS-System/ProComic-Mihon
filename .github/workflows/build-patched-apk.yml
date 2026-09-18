@@ -86,13 +86,16 @@ jobs:
           tail -n 120 /tmp/procomic-gradle-build.log
           exit $status
 
-      - name: Stop after build failure
-        if: steps.build_apk.outcome != 'success'
-        run: |
-          echo "Gradle build failed; uploaded log is the diagnostic artifact."
-          exit 1
+      - name: Upload Gradle diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: procomic-build-diagnostic
+          path: upstream/dist/procomic-gradle-build.log
+          if-no-files-found: ignore
 
       - name: Sign patched APK with a generated key
+        if: steps.build_apk.outcome == 'success'
         working-directory: upstream
         env:
           KEYSTORE_PASSWORD: "wyros-procomic-2026"
