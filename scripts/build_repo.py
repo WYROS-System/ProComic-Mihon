@@ -2,6 +2,8 @@
 import argparse, gzip, hashlib, json
 from pathlib import Path
 
+import os, shutil, subprocess, tempfile
+
 PACKAGE = "eu.kanade.tachiyomi.extension.ar.procomic"
 SOURCE_NAME = "ProComic"
 SOURCE_LANG = "ar"
@@ -58,6 +60,174 @@ def extension_message(version_code, version_name, apk_name, fingerprint):
         + scalar(7, 1)
         + message(8, source_message())
     )
+
+
+
+PATCHED_VERSION_CODE = 8
+PATCHED_VERSION_NAME = "1.5.2"
+PATCHED_APK_NAME = "procomic-release-v1.5.2.apk"
+UPSTREAM_REPO = "https://github.com/LoneVertex/mihon-extension-ar-procomic.git"
+
+
+def _write_github_env(values):
+    env_file = os.environ.get("GITHUB_ENV")
+    if not env_file:
+        return
+    with open(env_file, "a", encoding="utf-8") as handle:
+        for key, value in values.items():
+            handle.write(f"{key}={value}\n")
+
+
+def _read_current_publication():
+    path = ROOT / "publication.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _latest_build_tools():
+    android_home = os.environ.get("ANDROID_HOME")
+    if not android_home:
+        raise SystemExit("ANDROID_HOME is required to build the patched APK")
+    build_tools = sorted((Path(android_home) / "build-tools").glob("*"))
+    if not build_tools:
+        raise SystemExit("Android build-tools are not installed")
+    return build_tools[-1]
+
+
+def _set_version(source_root):
+    gradle_file = source_root / "app" / "build.gradle.kts"
+    text = gradle_file.read_text(encoding="utf-8")
+    if "versionCode = 7" not in text or 'versionName = "1.5.1"' not in text:
+        raise SystemExit("unexpected upstream version baseline; refusing automatic patch build")
+    text = text.replace("versionCode = 7", "versionCode = 8", 1)
+    text = text.replace('versionName = "1.5.1"', 'versionName = "1.5.2"', 1)
+    gradle_file.write_text(text, encoding="utf-8")
+
+
+def _build_patched_apk():
+    work_parent = Path(tempfile.mkdtemp(prefix="wyros-procomic-"))
+    source_root = work_parent / "upstream"
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", UPSTREAM_REPO, str(source_root)],
+            check=True,
+        )
+        subprocess.run(
+            ["python3", str(ROOT / "scripts" / "apply_reader_hotfix.py"), str(source_root)],
+            check=True,
+        )
+        _set_version(source_root)
+        subprocess.run(
+            [str(source_root / "gradlew"), ":app:assembleRelease", "--no-daemon", "--stacktrace"],
+            cwd=source_root,
+            check=True,
+        )
+        unsigned = source_root / "app" / "build" / "outputs" / "apk" / "release" / "app-release-unsigned.apk"
+        if not unsigned.is_file() or unsigned.stat().st_size < 100_000:
+            raise SystemExit("patched release APK was not produced")
+
+        build_tools = _latest_build_tools()
+        keytool = shutil.which("keytool")
+        if not keytool:
+            raise SystemExit("keytool not found")
+        keystore = work_parent / "release.jks"
+        password = hashlib.sha256(os.urandom(32)).hexdigest()
+        subprocess.run(
+            [
+                keytool, "-genkeypair",
+                "-keystore", str(keystore),
+                "-storepass", password,
+                "-keypass", password,
+                "-alias", "procomic",
+                "-keyalg", "RSA",
+                "-keysize", "4096",
+                "-validity", "3650",
+                "-dname", "CN=WYROS ProComic, OU=WYROS, O=ProComic",
+            ],
+            check=True,
+        )
+        signed = ROOT / "apk" / PATCHED_APK_NAME
+        signed.parent.mkdir(parents=True, exist_ok=True)
+        apksigner = build_tools / "apksigner"
+        subprocess.run(
+            [
+                str(apksigner), "sign",
+                "--ks", str(keystore),
+                "--ks-pass", f"pass:{password}",
+                "--ks-key-alias", "procomic",
+                "--key-pass", f"pass:{password}",
+                "--out", str(signed),
+                str(unsigned),
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [str(apksigner), "verify", "--verbose", "--print-certs", str(signed)],
+            check=True,
+        )
+        lines = subprocess.check_output(
+            [str(apksigner), "verify", "--print-certs", str(signed)],
+            text=True,
+        ).splitlines()
+        cert = next(
+            (line.split("SHA-256 digest:", 1)[1].strip().replace(":", "")
+             for line in lines if "SHA-256 digest:" in line),
+            "",
+        )
+        if len(cert) != 64:
+            raise SystemExit("failed to extract patched APK signing fingerprint")
+        sha256 = hashlib.sha256(signed.read_bytes()).hexdigest()
+        return cert, sha256
+    finally:
+        shutil.rmtree(work_parent, ignore_errors=True)
+
+
+def maybe_prepare_patched_release(upstream_version_code, upstream_version_name):
+    current = _read_current_publication()
+    existing = ROOT / "apk" / PATCHED_APK_NAME
+
+    # Once the patched release is published, keep it in place while the upstream channel
+    # remains older. This prevents the scheduled sync job from silently downgrading the repo.
+    if (
+        upstream_version_code < PATCHED_VERSION_CODE
+        and current
+        and int(current.get("versionCode", 0)) >= PATCHED_VERSION_CODE
+        and existing.is_file()
+    ):
+        for stale in (ROOT / "apk").glob("*.apk"):
+            if stale.name != PATCHED_APK_NAME:
+                stale.unlink()
+        fingerprint = str(current.get("signingKeyFingerprint", "")).strip()
+        if len(fingerprint) != 64:
+            raise SystemExit("published patched fingerprint is invalid")
+        _write_github_env({
+            "UPSTREAM_ASSET_NAME": PATCHED_APK_NAME,
+            "UPSTREAM_VERSION_CODE": PATCHED_VERSION_CODE,
+            "UPSTREAM_VERSION_NAME": PATCHED_VERSION_NAME,
+            "UPSTREAM_FINGERPRINT": fingerprint,
+            "UPSTREAM_SHA256": hashlib.sha256(existing.read_bytes()).hexdigest(),
+        })
+        return PATCHED_VERSION_CODE, PATCHED_VERSION_NAME, PATCHED_APK_NAME, fingerprint
+
+    if upstream_version_code >= PATCHED_VERSION_CODE:
+        return upstream_version_code, upstream_version_name, None, None
+
+    print("Upstream is older than the WYROS Reader hotfix release; building ProComic 1.5.2.")
+    for stale in (ROOT / "apk").glob("*.apk"):
+        stale.unlink()
+    fingerprint, sha256 = _build_patched_apk()
+    _write_github_env({
+        "UPSTREAM_ASSET_NAME": PATCHED_APK_NAME,
+        "UPSTREAM_VERSION_CODE": PATCHED_VERSION_CODE,
+        "UPSTREAM_VERSION_NAME": PATCHED_VERSION_NAME,
+        "UPSTREAM_FINGERPRINT": fingerprint,
+        "UPSTREAM_SHA256": sha256,
+    })
+    return PATCHED_VERSION_CODE, PATCHED_VERSION_NAME, PATCHED_APK_NAME, fingerprint
 
 def write_indexes(version_code, version_name, apk_name, fingerprint):
     public_apk = f"{REPO_RAW}/apk/{apk_name}"
@@ -122,6 +292,17 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if a.version_code <= 0 or not a.version_name or len(a.fingerprint) != 64:
         raise SystemExit("invalid publication metadata")
+
+    code, name, patched_name, patched_fingerprint = maybe_prepare_patched_release(
+        a.version_code,
+        a.version_name,
+    )
+    if patched_name is not None:
+        a.version_code = code
+        a.version_name = name
+        a.apk_name = patched_name
+        a.fingerprint = patched_fingerprint
+
     apk = ROOT / "apk" / a.apk_name
     if not apk.is_file() or apk.stat().st_size < 100000:
         raise SystemExit("APK missing or unexpectedly small")
