@@ -92,7 +92,7 @@ IMAGES_REPLACEMENT = '''        if (fallbackUrls.isNotEmpty()) {
         // validator.
         val normalizedReaderBody = body
             .replace("\\/", "/")
-            .replace("\\\"", """)
+            .replace("\\\"", "\"")
         val directCdnUrls = Regex(
             """https://(?:app|cdn[1-4])\.procomic\.(?:pro|net)/[^"\\\s]+\.(?:avif|webp|jpe?g|png)""",
         ).findAll(normalizedReaderBody)
