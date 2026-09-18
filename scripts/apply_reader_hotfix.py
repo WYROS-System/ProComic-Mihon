@@ -48,7 +48,7 @@ UTILS_ANCHOR = '''    fun resolveRefererForUrl(url: String): String {
     }
 
 '''
-UTILS_HELPER = '''    fun hasReaderDeferredOrProtectedContract(body: String): Boolean =
+UTILS_HELPER = r'''    fun hasReaderDeferredOrProtectedContract(body: String): Boolean =
         body.contains("\\\"deferredMedia\\\"") ||
             body.contains("\"deferredMedia\"") ||
             body.contains("\\\"protectionV2\\\"") ||
