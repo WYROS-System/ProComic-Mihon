@@ -101,8 +101,9 @@ def write_indexes(version_code, version_name, apk_name, fingerprint):
     }
     (ROOT / "repo.json").write_text(json.dumps(repo, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     extension = extension_message(version_code, version_name, apk_name, fingerprint)
+    extension_list = message(1, extension)
     contact = text(1, REPO_WEBSITE) + text(2, REPO_WEBSITE)
-    index = text(1, REPO_NAME) + text(2, "WYROS") + text(3, fingerprint) + message(4, contact) + message(101, extension)
+    index = text(1, REPO_NAME) + text(2, "WYROS") + text(3, fingerprint) + message(4, contact) + message(101, extension_list)
     (ROOT / "index.pb").write_bytes(gzip.compress(index, mtime=0))
     record = {
         "package": PACKAGE, "name": SOURCE_NAME, "language": SOURCE_LANG,
