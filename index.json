@@ -1,0 +1,32 @@
+{
+  "name": "WYROS ProComic",
+  "badgeLabel": "WYROS",
+  "contact": {
+    "website": "https://github.com/WYROS-System/ProComic-Mihon"
+  },
+  "extensionList": {
+    "extensions": [
+      {
+        "name": "ProComic",
+        "packageName": "eu.kanade.tachiyomi.extension.ar.procomic",
+        "resources": {
+          "apkUrl": "https://github.com/LoneVertex/mihon-extension-ar-procomic/releases/download/v1.5.1/procomic-release-v1.5.1.apk",
+          "iconUrl": "https://procomic.pro/favicon.svg"
+        },
+        "extensionLib": "1.6",
+        "versionCode": "7",
+        "versionName": "1.5.1",
+        "contentWarning": "CONTENT_WARNING_SAFE",
+        "sources": [
+          {
+            "id": "6818345659309721544",
+            "name": "ProComic",
+            "language": "ar",
+            "homeUrl": "https://procomic.pro",
+            "mirrorUrls": []
+          }
+        ]
+      }
+    ]
+  }
+}
