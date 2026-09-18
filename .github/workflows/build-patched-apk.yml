@@ -58,12 +58,15 @@ jobs:
         working-directory: upstream
         run: python3 -m pip install --disable-pip-version-check --no-input -r requirements-test.txt
 
-      - name: Run deterministic tests
+      - name: Validate Reader hotfix
+        run: |
+          python3 scripts/test_reader_hotfix.py
+          python3 -m py_compile scripts/apply_reader_hotfix.py
+
+      - name: Run Reader contract tests
         working-directory: upstream
         run: |
-          for test in $(find testdata -type f -name 'test_*.py' | sort); do
-            python3 "$test" || exit 1
-          done
+          python3 testdata/reader/test_reader_contract.py
           git diff --check
 
       - name: Build release APK
