@@ -11,8 +11,8 @@
         "name": "ProComic",
         "packageName": "eu.kanade.tachiyomi.extension.ar.procomic",
         "resources": {
-          "apkUrl": "https://github.com/WYROS-System/ProComic-Mihon/raw/main/apk/procomic-release-v1.5.1.apk",
-          "iconUrl": "https://github.com/WYROS-System/ProComic-Mihon/raw/main/icon/eu.kanade.tachiyomi.extension.ar.procomic.png"
+          "apkUrl": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/procomic-release-v1.5.1.apk",
+          "iconUrl": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/icon/eu.kanade.tachiyomi.extension.ar.procomic.png"
         },
         "extensionLib": "1.6",
         "versionCode": "7",
