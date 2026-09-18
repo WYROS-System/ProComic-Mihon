@@ -74,40 +74,21 @@ jobs:
           grep -q 'versionName = "1.5.3"' app/build.gradle.kts
 
       - name: Build release APK
-        id: build_apk
         working-directory: upstream
-        continue-on-error: true
-        run: |
-          set +e
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace > /tmp/procomic-gradle-build.log 2>&1
-          status=$?
-          mkdir -p dist
-          cp /tmp/procomic-gradle-build.log dist/procomic-gradle-build.log
-          tail -n 120 /tmp/procomic-gradle-build.log
-          exit $status
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Upload Gradle diagnostic log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: procomic-build-diagnostic
-          path: upstream/dist/procomic-gradle-build.log
-          if-no-files-found: ignore
-
-      - name: Sign patched APK with a generated key
-        if: steps.build_apk.outcome == 'success'
+      - name: Sign patched APK
         working-directory: upstream
         env:
           KEYSTORE_PASSWORD: "wyros-procomic-2026"
         run: |
           set -euo pipefail
           sdk_build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
-          keytool -genkeypair             -keystore /tmp/wyros-procomic-1.5.2.jks             -storepass "$KEYSTORE_PASSWORD"             -keypass "$KEYSTORE_PASSWORD"             -alias procomic             -keyalg RSA             -keysize 4096             -validity 3650             -dname "CN=WYROS ProComic, OU=WYROS, O=ProComic"
+          keytool -genkeypair             -keystore /tmp/wyros-procomic-1.5.3.jks             -storepass "$KEYSTORE_PASSWORD"             -keypass "$KEYSTORE_PASSWORD"             -alias procomic             -keyalg RSA             -keysize 4096             -validity 3650             -dname "CN=WYROS ProComic, OU=WYROS, O=ProComic"
           mkdir -p dist
-          "$sdk_build_tools/apksigner" sign             --ks /tmp/wyros-procomic-1.5.2.jks             --ks-pass pass:"$KEYSTORE_PASSWORD"             --ks-key-alias procomic             --key-pass pass:"$KEYSTORE_PASSWORD"             --out dist/ProComic-v1.5.3-WYROS-signed.apk             app/build/outputs/apk/release/app-release-unsigned.apk
-          "$sdk_build_tools/apksigner" verify --verbose --print-certs dist/ProComic-v1.5.2-WYROS-signed.apk
-          sha256sum dist/ProComic-v1.5.2-WYROS-signed.apk > dist/ProComic-v1.5.2-WYROS-signed.apk.sha256
-          "$sdk_build_tools/aapt2" dump badging dist/ProComic-v1.5.2-WYROS-signed.apk | head -n 2
+          "$sdk_build_tools/apksigner" sign             --ks /tmp/wyros-procomic-1.5.3.jks             --ks-pass pass:"$KEYSTORE_PASSWORD"             --ks-key-alias procomic             --key-pass pass:"$KEYSTORE_PASSWORD"             --out dist/ProComic-v1.5.3-WYROS-signed.apk             app/build/outputs/apk/release/app-release-unsigned.apk
+          "$sdk_build_tools/apksigner" verify --verbose --print-certs dist/ProComic-v1.5.3-WYROS-signed.apk
+          sha256sum dist/ProComic-v1.5.3-WYROS-signed.apk > dist/ProComic-v1.5.3-WYROS-signed.apk.sha256
 
       - name: Upload patched APK
         if: steps.build_apk.outcome == 'success'
