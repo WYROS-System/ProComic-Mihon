@@ -2,6 +2,7 @@
   "index_v2": "https://github.com/WYROS-System/ProComic-Mihon/raw/main/index.pb",
   "meta": {
     "name": "WYROS ProComic",
-    "website": "https://github.com/WYROS-System/ProComic-Mihon"
+    "website": "https://github.com/WYROS-System/ProComic-Mihon",
+    "signingKeyFingerprint": "b655a474503f4471fdaf6ba35b9385f71d144669f3c28602c5b60b062022c41d"
   }
 }
