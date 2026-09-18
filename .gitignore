@@ -1,0 +1,12 @@
+# Build output
+.gradle/
+build/
+.idea/
+*.iml
+local.properties
+*.log
+cache/
+tmp/
+keystore/
+*.jks
+*.keystore
