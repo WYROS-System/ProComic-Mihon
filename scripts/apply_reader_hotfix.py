@@ -87,15 +87,11 @@ IMAGES_REPLACEMENT = '''        if (fallbackUrls.isNotEmpty()) {
             }
         }
 
-        // Some current Reader payloads inline page URLs directly. Normalize the escaped
-        // RSC transport form first, then extract only URLs accepted by the strict page-image
-        // validator.
-        val normalizedReaderBody = body
-            .replace("\\/", "/")
-            .replace("\\\"", "\"")
+        // Some current Reader payloads inline page URLs directly. Extract only URLs from
+        // confirmed ProComic CDN hosts, then apply the strict page-image validator.
         val directCdnUrls = Regex(
             """https://(?:app|cdn[1-4])\.procomic\.(?:pro|net)/[^"\\\s]+\.(?:avif|webp|jpe?g|png)""",
-        ).findAll(normalizedReaderBody)
+        ).findAll(body)
             .map { it.value.trim() }
             .filter(::isAllowedPageImageUrl)
             .distinct()
