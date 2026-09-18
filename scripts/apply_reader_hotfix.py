@@ -87,14 +87,16 @@ IMAGES_REPLACEMENT = '''        if (fallbackUrls.isNotEmpty()) {
             }
         }
 
-        // Some current Reader payloads inline the page URLs directly but use CDN hosts
-        // rather than app.procomic.*. Recover those URLs generically, then run the strict
-        // host/path/extension validator before returning them.
+        // Some current Reader payloads inline page URLs directly. Normalize the escaped
+        // RSC transport form first, then extract only URLs accepted by the strict page-image
+        // validator.
+        val normalizedReaderBody = body
+            .replace("\\/", "/")
+            .replace("\\\"", """)
         val directCdnUrls = Regex(
-            """https://(?:app|cdn[1-4])\\.procomic\\.(?:pro|net)/[^"\\\\\\s]+\\.(?:avif|webp|jpe?g|png)""",
-        ).findAll(body)
-            .map { it.value.replace("\\", "") }
-            .map(String::trim)
+            """https://(?:app|cdn[1-4])\.procomic\.(?:pro|net)/[^"\\\s]+\.(?:avif|webp|jpe?g|png)""",
+        ).findAll(normalizedReaderBody)
+            .map { it.value.trim() }
             .filter(::isAllowedPageImageUrl)
             .distinct()
             .toList()
@@ -118,6 +120,16 @@ IMAGES_REPLACEMENT = '''        if (fallbackUrls.isNotEmpty()) {
             )
             return emptyList()
         }
+
+        // A response can also legitimately be image-less while the server is preparing or
+        // changing its Reader contract. Avoid failing the whole chapter at this extraction stage;
+        // pageListParse() will still have a chance to use any deferred/protected metadata.
+        if (diag) ProComicDiag.logStage(
+            diagTag,
+            8,
+            "no usable public image manifest; returning empty set",
+        )
+        return emptyList()
 
         // 4. Explicit Failure
 '''
