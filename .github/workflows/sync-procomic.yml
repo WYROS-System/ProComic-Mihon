@@ -83,11 +83,18 @@ jobs:
           cert="$("$sdk_build_tools/apksigner" verify --print-certs "$apk" | sed -n 's/.*SHA-256 digest: //p' | head -n1 | tr -d ':')"
           test "${#cert}" -eq 64
           old=""
+          old_code=0
           if [[ -f repo.json ]]; then
             old="$(jq -r '.meta.signingKeyFingerprint // empty' repo.json)"
           fi
-          if [[ -n "$old" && "$old" != "$cert" ]]; then
-            echo "Signing certificate changed; automatic publication blocked." >&2
+          if [[ -f publication.json ]]; then
+            old_code="$(jq -r '.versionCode // 0' publication.json)"
+          fi
+          # A maintained WYROS hotfix may intentionally remain newer than upstream. In that
+          # case, keep the hotfix signing identity and do not block the build merely because
+          # upstream uses its original certificate.
+          if [[ -n "$old" && "$old" != "$cert" && "$version_code" -ge "$old_code" ]]; then
+            echo "Upstream signing certificate changed for a non-hotfix publication; blocking." >&2
             exit 1
           fi
           {
