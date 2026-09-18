@@ -112,8 +112,8 @@ jobs:
         if: steps.build_apk.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: ProComic-v1.5.2-WYROS
+          name: ProComic-v1.5.3-WYROS
           path: |
-            upstream/dist/ProComic-v1.5.2-WYROS-signed.apk
-            upstream/dist/ProComic-v1.5.2-WYROS-signed.apk.sha256
+            upstream/dist/ProComic-v1.5.3-WYROS-signed.apk
+            upstream/dist/ProComic-v1.5.3-WYROS-signed.apk.sha256
           if-no-files-found: error
