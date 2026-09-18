@@ -11,6 +11,7 @@ CONTENT_WARNING = "CONTENT_WARNING_SAFE"
 EXTENSION_LIB = "1.6"
 REPO_NAME = "WYROS ProComic"
 REPO_WEBSITE = "https://github.com/WYROS-System/ProComic-Mihon"
+REPO_RAW = "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main"
 ROOT = Path(__file__).resolve().parents[1]
 
 def varint(value):
@@ -44,8 +45,8 @@ def source_message():
 
 def extension_message(version_code, version_name, apk_name, fingerprint):
     resources = (
-        text(1, f"{REPO_WEBSITE}/raw/main/apk/{apk_name}")
-        + text(2, f"{REPO_WEBSITE}/raw/main/icon/{PACKAGE}.png")
+        text(1, f"{REPO_RAW}/apk/{apk_name}")
+        + text(2, f"{REPO_RAW}/icon/{PACKAGE}.png")
     )
     return (
         text(1, SOURCE_NAME)
@@ -95,7 +96,7 @@ def write_indexes(version_code, version_name, apk_name, fingerprint):
     }
     (ROOT / "index.json").write_text(json.dumps(modern, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     repo = {
-        "index_v2": f"{REPO_WEBSITE}/raw/main/index.pb",
+        "index_v2": f"{REPO_RAW}/index.pb",
         "meta": {"name": REPO_NAME, "website": REPO_WEBSITE, "signingKeyFingerprint": fingerprint},
     }
     (ROOT / "repo.json").write_text(json.dumps(repo, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
