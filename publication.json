@@ -2,10 +2,10 @@
   "package": "eu.kanade.tachiyomi.extension.ar.procomic",
   "name": "ProComic",
   "language": "ar",
-  "versionCode": 8,
-  "versionName": "1.5.2",
-  "apk": "procomic-release-v1.5.2.apk",
-  "sha256": "841446efc38f9c1e0ca3fdc21d329d04e07e00ec493aaad5d4bf6a66f1f1c5b6",
-  "signingKeyFingerprint": "f0af9253c7b8b565745309b7c2f3b2d9e4933991c8fddb4fd77e9c82d1d27f67",
+  "versionCode": 9,
+  "versionName": "1.5.3",
+  "apk": "procomic-release-v1.5.3.apk",
+  "sha256": "5cfa44a59dd306299b9a93cd65447203996fb4eff72a9e27a08daf6a3bdfbeae",
+  "signingKeyFingerprint": "fa8352b9fee9c32a9f9b88af35aa421e80d2773b762d027ce25a4928571795aa",
   "sourceUrl": "https://procomic.pro"
 }
