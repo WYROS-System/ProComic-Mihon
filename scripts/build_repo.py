@@ -60,8 +60,8 @@ def extension_message(version_code, version_name, apk_name, fingerprint):
     )
 
 def write_indexes(version_code, version_name, apk_name, fingerprint):
-    public_apk = f"{REPO_WEBSITE}/raw/main/apk/{apk_name}"
-    public_icon = f"{REPO_WEBSITE}/raw/main/icon/{PACKAGE}.png"
+    public_apk = f"{REPO_RAW}/apk/{apk_name}"
+    public_icon = f"{REPO_RAW}/icon/{PACKAGE}.png"
     legacy = [{
         "name": SOURCE_NAME,
         "pkg": PACKAGE,
