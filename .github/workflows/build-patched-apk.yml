@@ -48,8 +48,8 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace("versionCode = 7", "versionCode = 8", 1)
-          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.2"', 1)
+          s = s.replace("versionCode = 7", "versionCode = 9", 1)
+          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.3"', 1)
           p.write_text(s)
           PY
           grep -n -E 'versionCode|versionName' app/build.gradle.kts
@@ -104,7 +104,7 @@ jobs:
           sdk_build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
           keytool -genkeypair             -keystore /tmp/wyros-procomic-1.5.2.jks             -storepass "$KEYSTORE_PASSWORD"             -keypass "$KEYSTORE_PASSWORD"             -alias procomic             -keyalg RSA             -keysize 4096             -validity 3650             -dname "CN=WYROS ProComic, OU=WYROS, O=ProComic"
           mkdir -p dist
-          "$sdk_build_tools/apksigner" sign             --ks /tmp/wyros-procomic-1.5.2.jks             --ks-pass pass:"$KEYSTORE_PASSWORD"             --ks-key-alias procomic             --key-pass pass:"$KEYSTORE_PASSWORD"             --out dist/ProComic-v1.5.2-WYROS-signed.apk             app/build/outputs/apk/release/app-release-unsigned.apk
+          "$sdk_build_tools/apksigner" sign             --ks /tmp/wyros-procomic-1.5.2.jks             --ks-pass pass:"$KEYSTORE_PASSWORD"             --ks-key-alias procomic             --key-pass pass:"$KEYSTORE_PASSWORD"             --out dist/ProComic-v1.5.3-WYROS-signed.apk             app/build/outputs/apk/release/app-release-unsigned.apk
           "$sdk_build_tools/apksigner" verify --verbose --print-certs dist/ProComic-v1.5.2-WYROS-signed.apk
           sha256sum dist/ProComic-v1.5.2-WYROS-signed.apk > dist/ProComic-v1.5.2-WYROS-signed.apk.sha256
           "$sdk_build_tools/aapt2" dump badging dist/ProComic-v1.5.2-WYROS-signed.apk | head -n 2
