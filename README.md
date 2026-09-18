@@ -15,13 +15,17 @@ The repository is intentionally separate from `WYROS-System/WYROS-System`.
 
 ## Add to Mihon
 
-Preferred modern index:
+Preferred current repository descriptor:
 
-https://github.com/WYROS-System/ProComic-Mihon/raw/main/index.pb
+https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/repo.json
 
-Legacy fallback:
+Direct modern protobuf index:
 
-https://github.com/WYROS-System/ProComic-Mihon/raw/main/index.min.json
+https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.pb
+
+Legacy JSON index is retained only for older clients:
+
+https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.min.json
 
 ## Trust and updates
 
