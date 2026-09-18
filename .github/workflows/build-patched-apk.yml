@@ -74,8 +74,23 @@ jobs:
           grep -q 'versionName = "1.5.2"' app/build.gradle.kts
 
       - name: Build release APK
+        id: build_apk
         working-directory: upstream
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        continue-on-error: true
+        run: |
+          set +e
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace > /tmp/procomic-gradle-build.log 2>&1
+          status=$?
+          mkdir -p dist
+          cp /tmp/procomic-gradle-build.log dist/procomic-gradle-build.log
+          tail -n 120 /tmp/procomic-gradle-build.log
+          exit $status
+
+      - name: Stop after build failure
+        if: steps.build_apk.outcome != 'success'
+        run: |
+          echo "Gradle build failed; uploaded log is the diagnostic artifact."
+          exit 1
 
       - name: Sign patched APK with a generated key
         working-directory: upstream
