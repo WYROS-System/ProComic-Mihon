@@ -97,30 +97,46 @@ jobs:
             echo "UPSTREAM_SHA256=$(sha256sum "$apk" | cut -d' ' -f1)"
           } >> "$GITHUB_ENV"
 
-      - name: Install Pillow
-        run: python -m pip install --disable-pip-version-check Pillow
-
       - name: Generate indexes and publication metadata
         run: |
           python scripts/build_repo.py --version-code "$UPSTREAM_VERSION_CODE" --version-name "$UPSTREAM_VERSION_NAME" --apk-name "$UPSTREAM_ASSET_NAME" --fingerprint "$UPSTREAM_FINGERPRINT"
 
-      - name: Generate repository icon
+      - name: Extract official extension icon
+        shell: bash
         run: |
-          python - <<'PY'
+          set -euo pipefail
+          apk="apk/$UPSTREAM_ASSET_NAME"
+          sdk_build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
+          badging="$($sdk_build_tools/aapt2 dump badging "$apk")"
+          icon_path="$(sed -n "s/.*application-icon-320:'\([^']*\)'.*/\1/p" <<<"$badging" | head -n1)"
+          if [[ -z "$icon_path" ]]; then
+            icon_path="$(sed -n "s/.*application-icon-160:'\([^']*\)'.*/\1/p" <<<"$badging" | head -n1)"
+          fi
+          test -n "$icon_path"
+          python - "$apk" "$icon_path" <<'PY'
+          import sys, zipfile
           from pathlib import Path
-          from PIL import Image, ImageDraw, ImageFont
+          apk = Path(sys.argv[1])
+          icon_path = sys.argv[2]
           out = Path("icon/eu.kanade.tachiyomi.extension.ar.procomic.png")
-          img = Image.new("RGBA", (192, 192), (22, 105, 122, 255))
-          d = ImageDraw.Draw(img)
-          d.rounded_rectangle((12, 12, 180, 180), radius=32, outline=(255,255,255,255), width=8)
-          try:
-              font = ImageFont.truetype("DejaVuSans-Bold.ttf", 72)
-          except OSError:
-              font = ImageFont.load_default()
-          label = "PC"
-          box = d.textbbox((0, 0), label, font=font)
-          d.text(((192-(box[2]-box[0]))/2, (192-(box[3]-box[1]))/2-8), label, fill=(255,255,255,255), font=font)
-          img.save(out, "PNG")
+          with zipfile.ZipFile(apk) as z:
+              try:
+                  data = z.read(icon_path)
+              except KeyError:
+                  candidates = [
+                      n for n in z.namelist()
+                      if n.lower().endswith(".png")
+                      and "/mipmap" in n
+                      and "ic_launcher" in n
+                  ]
+                  if not candidates:
+                      raise SystemExit(f"icon resource not found: {icon_path}")
+                  data = z.read(sorted(candidates)[-1])
+          if len(data) < 100:
+              raise SystemExit("extracted icon is unexpectedly small")
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_bytes(data)
+          print(f"extracted {icon_path} -> {out} ({len(data)} bytes)")
           PY
 
       - name: Publish repository changes
