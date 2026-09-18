@@ -110,6 +110,7 @@ jobs:
           "$sdk_build_tools/aapt2" dump badging dist/ProComic-v1.5.2-WYROS-signed.apk | head -n 2
 
       - name: Upload patched APK
+        if: steps.build_apk.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: ProComic-v1.5.2-WYROS
