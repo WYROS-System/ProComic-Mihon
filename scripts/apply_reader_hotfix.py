@@ -87,10 +87,33 @@ IMAGES_REPLACEMENT = '''        if (fallbackUrls.isNotEmpty()) {
             }
         }
 
-        if (hasReaderDeferredOrProtectedContract(body)) {
+        // Some current Reader payloads inline the page URLs directly but use CDN hosts
+        // rather than app.procomic.*. Recover those URLs generically, then run the strict
+        // host/path/extension validator before returning them.
+        val directCdnUrls = Regex(
+            """https://(?:app|cdn[1-4])\\.procomic\\.(?:pro|net)/[^"\\\\\\s]+\\.(?:avif|webp|jpe?g|png)""",
+        ).findAll(body)
+            .map { it.value.replace("\\", "") }
+            .map(String::trim)
+            .filter(::isAllowedPageImageUrl)
+            .distinct()
+            .toList()
+
+        if (directCdnUrls.isNotEmpty()) {
             if (diag) ProComicDiag.logStage(
                 diagTag,
                 6,
+                "fallback direct CDN URLs found ${directCdnUrls.size} chapter images",
+            )
+            return directCdnUrls
+        }
+
+        // A protected/deferred Reader may legitimately have no public image manifest. Return an
+        // empty public set so pageListParse() can continue into deferred/protected delivery.
+        if (hasReaderDeferredOrProtectedContract(body)) {
+            if (diag) ProComicDiag.logStage(
+                diagTag,
+                7,
                 "no public image manifest; deferred/protected Reader contract detected",
             )
             return emptyList()
