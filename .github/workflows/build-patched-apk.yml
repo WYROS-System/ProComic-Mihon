@@ -74,10 +74,28 @@ jobs:
           grep -q 'versionName = "1.5.3"' app/build.gradle.kts
 
       - name: Build release APK
+        id: build_apk
+        continue-on-error: true
         working-directory: upstream
-        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+        run: |
+          set +e
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace > /tmp/procomic-gradle-build.log 2>&1
+          status=$?
+          mkdir -p dist
+          cp /tmp/procomic-gradle-build.log dist/procomic-gradle-build.log
+          tail -n 160 /tmp/procomic-gradle-build.log
+          exit $status
+
+      - name: Upload Gradle diagnostic
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: procomic-1.5.3-build-diagnostic
+          path: upstream/dist/procomic-gradle-build.log
+          if-no-files-found: error
 
       - name: Sign patched APK
+        if: steps.build_apk.outcome == 'success'
         working-directory: upstream
         env:
           KEYSTORE_PASSWORD: "wyros-procomic-2026"
