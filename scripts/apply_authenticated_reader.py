@@ -772,6 +772,13 @@ def replace_once(path: Path, old: str, new: str) -> None:
         raise SystemExit(f"{path}: expected one anchor, found {text.count(old)}")
     path.write_text(text.replace(old, new), encoding="utf-8")
 
+def replace_text_once(text: str, old: str, new: str, description: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{description}: expected one match, found {count}")
+    return text.replace(old, new, 1)
+
+
 def replace_function(text: str, signature: str, replacement: str, next_marker: str) -> str:
     start = text.find(signature)
     if start < 0:
@@ -791,19 +798,32 @@ def apply(root: Path) -> None:
     if not pro.is_file() or not build_gradle.is_file():
         raise SystemExit("missing expected upstream files")
 
-    replace_once(pro, CLIENT_ANCHOR, CLIENT_REPLACEMENT)
-
     pro_text = pro.read_text(encoding="utf-8")
-    print("patch debug: readerAnchorMatches=", pro_text.count(READER_FALLBACK_ANCHOR))
-    print("patch debug: bodyAnchorMatches=", pro_text.count(BODY_FALLBACK_ANCHOR))
-    replace_once(pro, READER_FALLBACK_ANCHOR, READER_FALLBACK_REPLACEMENT)
-    replace_once(pro, BODY_FALLBACK_ANCHOR, BODY_FALLBACK_REPLACEMENT)
-    pro_text = pro.read_text(encoding="utf-8")
+    pro_text = replace_text_once(
+        pro_text,
+        CLIENT_ANCHOR,
+        CLIENT_REPLACEMENT,
+        "client integration",
+    )
+    pro_text = replace_text_once(
+        pro_text,
+        READER_FALLBACK_ANCHOR,
+        READER_FALLBACK_REPLACEMENT,
+        "authenticated Reader fallback",
+    )
+    pro_text = replace_text_once(
+        pro_text,
+        BODY_FALLBACK_ANCHOR,
+        BODY_FALLBACK_REPLACEMENT,
+        "Reader body branch",
+    )
     pro_text = replace_function(
         pro_text,
         DEFERRED_SIGNATURE,
         DEFERRED_SOURCE,
-        "\n\n    // ---- Image URL ----",
+        "
+
+    // ---- Image URL ----",
     )
 
     reader_request_old = '''        val readerHeaders = headersBuilder()
@@ -827,11 +847,17 @@ def apply(root: Path) -> None:
 
     gradle_text = build_gradle.read_text(encoding="utf-8")
     if "androidx.webkit:webkit:" not in gradle_text:
-        replace_once(
-            build_gradle,
-            "dependencies {\n",
-            'dependencies {\n    // Mihon provides AndroidX WebKit at runtime; compile against the same WebView API.\n    compileOnly("androidx.webkit:webkit:1.17.0")\n',
+        gradle_text = replace_text_once(
+            gradle_text,
+            "dependencies {
+",
+            'dependencies {
+    // Mihon provides AndroidX WebKit at runtime; compile against the same WebView API.
+    compileOnly("androidx.webkit:webkit:1.17.0")
+',
+            "AndroidX WebKit dependency",
         )
+        build_gradle.write_text(gradle_text, encoding="utf-8")
 
 def main() -> None:
     parser = argparse.ArgumentParser()
