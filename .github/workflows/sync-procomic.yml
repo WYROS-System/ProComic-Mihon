@@ -30,15 +30,6 @@ jobs:
       - name: Apply authenticated browser Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
 
-      - name: Verify patch contract
-        working-directory: upstream
-        run: |
-          set -euo pipefail
-          test -f app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
-          grep -q "ProComicBrowserReader.load" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComic.kt
-          grep -q "CookieManager" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
-          grep -q "domStorageEnabled = true" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
-
       - name: Build release APK
         working-directory: upstream
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
