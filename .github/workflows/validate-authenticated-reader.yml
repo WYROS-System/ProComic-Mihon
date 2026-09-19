@@ -1,0 +1,54 @@
+name: Validate authenticated Reader
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/apply_authenticated_reader.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout WYROS repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Clone verified upstream
+        run: git clone --depth 1 --branch v1.5.1 https://github.com/LoneVertex/mihon-extension-ar-procomic.git upstream
+
+      - name: Apply authenticated Reader patch
+        run: python3 scripts/apply_authenticated_reader.py upstream
+
+      - name: Verify generated source contract
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          test -f app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
+          grep -q 'ProComicBrowserReader.load' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComic.kt
+          grep -q 'CookieManager' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
+          grep -q 'domStorageEnabled = true' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
+
+      - name: Build release
+        working-directory: upstream
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Verify APK exists
+        run: |
+          set -euo pipefail
+          test -s upstream/app/build/outputs/apk/release/app-release-unsigned.apk
+          stat -c '%n %s bytes' upstream/app/build/outputs/apk/release/app-release-unsigned.apk
