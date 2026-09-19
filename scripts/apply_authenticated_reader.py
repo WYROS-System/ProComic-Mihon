@@ -241,115 +241,76 @@ def apply(root: Path) -> None:
         raise SystemExit(f"missing {pro}")
 
     pro_text = pro.read_text(encoding="utf-8")
-    reader_start = """        val (body, url, activeHost) = if (initialHasImages && !initialRedirectedAway) {"""
+    reader_start = (
+        "        val (body, url, activeHost) = if (initialHasImages && !initialRedirectedAway) {"
+    )
     if reader_start not in pro_text:
         raise SystemExit("upstream Reader selection anchor not found")
 
-    reader_insertion = """        val browserResult = if (
-            initialBody.contains("Safe Browsing Required", ignoreCase = true) ||
-            initialBody.contains("Log in and disable Safe Browsing", ignoreCase = true) ||
-            initialBody.contains("هذا المحتوى مقيد", ignoreCase = true)
-        ) {
-            runCatching {
-                ProComicBrowserReader.load(initialUrl)
-            }.onFailure {
-                ProComicDiag.logException("PAGES", "authenticated browser Reader", initialUrl, it)
-            }.getOrNull()
-        } else {
-            null
-        }
+    reader_insertion = (
+        "        val browserResult = if (\n"
+        "            initialBody.contains(\"Safe Browsing Required\", ignoreCase = true) ||\n"
+        "            initialBody.contains(\"Log in and disable Safe Browsing\", ignoreCase = true) ||\n"
+        "            initialBody.contains(\"هذا المحتوى مقيد\", ignoreCase = true)\n"
+        "        ) {\n"
+        "            runCatching {\n"
+        "                ProComicBrowserReader.load(initialUrl)\n"
+        "            }.onFailure {\n"
+        "                ProComicDiag.logException(\"PAGES\", \"authenticated browser Reader\", initialUrl, it)\n"
+        "            }.getOrNull()\n"
+        "        } else {\n"
+        "            null\n"
+        }\n"
+        "\n"
+        "        val browserBody = browserResult?.contractText?.takeIf { it.isNotBlank() }\n"
+        "        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {\n"
+        "            val recoveredUrl = browserResult?.finalUrl ?: initialUrl\n"
+        "            val recoveredHost = runCatching { java.net.URI(recoveredUrl).host }.getOrNull() ?: initialHost\n"
+        "            ProComicDiag.logStage(\"PAGES\", 15, \"authenticated browser Reader contract recovered\")\n"
+        "            Triple(browserBody, recoveredUrl, recoveredHost)\n"
+        "        } else if (initialHasImages && !initialRedirectedAway) {"
+    )
+    pro_text = pro_text.replace(reader_start, reader_insertion, 1)
+    pro.write_text(pro_text, encoding="utf-8")
 
-        val browserBody = browserResult?.contractText?.takeIf { it.isNotBlank() }
-        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {
-            val recoveredUrl = browserResult?.finalUrl ?: initialUrl
-            val recoveredHost = runCatching { java.net.URI(recoveredUrl).host }
-                .getOrNull()
-                ?: initialHost
-            ProComicDiag.logStage("PAGES", 15, "authenticated browser Reader contract recovered")
-            Triple(browserBody, recoveredUrl, recoveredHost)
-        } else     page_anchor = '''        val publicImages = ProComicUtils.extractPageImages(body, "PAGES", url)
-        val pages = publicImages.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }.toMutableList()
-'''
-    page_replacement = '''        val initialImages = ProComicUtils.extractPageImages(body, "PAGES", url)
+    page_anchor = (
+        "        val publicImages = ProComicUtils.extractPageImages(body, \"PAGES\", url)\n"
+        "        val pages = publicImages.mapIndexed { index, imageUrl ->\n"
+        "            Page(index, imageUrl = imageUrl)\n"
+        "        }.toMutableList()\n"
+    )
+    page_replacement = page_anchor
 
-        val browserResult = if (
-            body.contains("Safe Browsing Required", ignoreCase = true) ||
-            body.contains("Log in and disable Safe Browsing", ignoreCase = true) ||
-            body.contains("هذا المحتوى مقيد", ignoreCase = true)
-        ) {
-            runCatching {
-                ProComicBrowserReader.load(url)
-            }.onFailure {
-                ProComicDiag.logException("PAGES", "authenticated browser Reader", url, it)
-            }.getOrNull()
-        } else {
-            null
-        }
+    # Keep this patch source-only and idempotent.
+    if page_anchor not in pro.read_text(encoding="utf-8"):
+        raise SystemExit("upstream Reader page-list anchor not found")
 
-        val browserImages = browserResult?.imageUrls.orEmpty()
-            .filter(ProComicUtils::isAllowedPageImageUrl)
-            .distinct()
-        val browserContractImages = browserResult?.contractText
-            ?.takeIf { it.isNotBlank() }
-            ?.let {
-                runCatching { ProComicUtils.extractPageImages(it, "BROWSER", url) }
-                    .getOrDefault(emptyList())
-            }
-            .orEmpty()
-        val recoveredImages = (browserImages + browserContractImages).distinct()
+    replace_once(pro, page_anchor, page_replacement)
 
-        if (recoveredImages.size > initialImages.size) {
-            ProComicDiag.logStage(
-                "PAGES",
-                15,
-                "authenticated browser Reader recovered " + recoveredImages.size + " images",
-            )
-            return recoveredImages.mapIndexed { index, imageUrl ->
-                Page(index, imageUrl = imageUrl)
-            }
-        }
-
-        browserResult?.blockedReason?.let {
-            ProComicDiag.logStage("PAGES", 14, it)
-        }
-
-        val pages = initialImages.mapIndexed { index, imageUrl ->
-            Page(index, imageUrl = imageUrl)
-        }.toMutableList()
-'''
-
-    reader_request_old = '''        val readerHeaders = headersBuilder()
-            .set("Referer", "https://procomic.pro/")
-            .build()
-        return GET(canonicalUrl, readerHeaders)
-'''
-    reader_request_new = '''        val readerHeaders = headersBuilder()
-            .set("Referer", "https://procomic.pro/")
-            .set("Cache-Control", "no-cache")
-            .build()
-        return GET(canonicalUrl, readerHeaders)
-'''
+    reader_request_old = (
+        "        val readerHeaders = headersBuilder()\n"
+        "            .set(\"Referer\", \"https://procomic.pro/\")\n"
+        "            .build()\n"
+        "        return GET(canonicalUrl, readerHeaders)\n"
+    )
+    reader_request_new = (
+        "        val readerHeaders = headersBuilder()\n"
+        "            .set(\"Referer\", \"https://procomic.pro/\")\n"
+        "            .set(\"Cache-Control\", \"no-cache\")\n"
+        "            .build()\n"
+        "        return GET(canonicalUrl, readerHeaders)\n"
+    )
     if reader_request_old in pro.read_text(encoding="utf-8"):
         replace_once(pro, reader_request_old, reader_request_new)
 
     browser.write_text(BROWSER_SOURCE, encoding="utf-8")
-    pro_text = pro.read_text(encoding="utf-8")
-    if "authenticated browser-backed Reader fallback" not in pro_text:
-        pro_text = pro_text.replace(
-            "Known limitations:\n",
-            "Known limitations:\n   - Restricted/auth-required Reader responses are retried inside the persistent Mihon WebView profile; server-side entitlement remains authoritative.\n",
-            1,
-        )
-    pro.write_text(pro_text, encoding="utf-8")
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("source_root", type=Path)
     args = parser.parse_args()
     apply(args.source_root.resolve())
-    print("authenticated browser-backed Reader patch applied")
+    print("authenticated browser Reader patch applied")
 
 if __name__ == "__main__":
     main()
