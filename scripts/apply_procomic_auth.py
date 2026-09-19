@@ -174,7 +174,7 @@ def apply(root: Path) -> None:
         replace_once(pro, reader_old, reader_new)
 
     map_old = '''            val request = pageRequest.newBuilder()
-                .url("https://$host/chapter-map-proxy-plan/\${payload.chapterId}")
+                .url("https://$host/chapter-map-proxy-plan/${payload.chapterId}")
                 .header("Accept", "application/json")
                 .header("Content-Type", "application/json")
                 .header("Referer", "https://$host/")
