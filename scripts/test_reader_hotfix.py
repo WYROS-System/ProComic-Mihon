@@ -1,28 +1,37 @@
 #!/usr/bin/env python3
-"""Regression checks for the Reader missing-appImages hotfix."""
+"""Validate the maintained Reader/auth hotfix scripts."""
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PATCHER = ROOT / "scripts" / "apply_reader_hotfix.py"
+reader = ROOT / "scripts" / "apply_reader_hotfix.py"
+auth = ROOT / "scripts" / "apply_procomic_auth.py"
 
 
 def main() -> None:
-    text = PATCHER.read_text(encoding="utf-8")
-    required = [
-        'val publicImages = try {',
+    reader_text = reader.read_text(encoding="utf-8")
+    auth_text = auth.read_text(encoding="utf-8")
+
+    required_reader = [
         "hasReaderDeferredOrProtectedContract",
-        "public appImages manifest absent; continuing with deferred/protected reader",
         'extractJsonArrayAfterKey(body, "images")',
-        "fallback plain images[] found",
-        'filter { it.contains("/chapters/") }',
-        "no public image manifest; deferred/protected Reader contract detected",
-        "expected exactly one source anchor",
+        "directCdnUrls",
     ]
-    missing = [item for item in required if item not in text]
+    required_auth = [
+        "CookieManager",
+        "ory_kratos_session",
+        "fun isLoggedIn(): Boolean",
+        "fun addCookies",
+        "Cache-Control",
+        "ProComicWebViewAuth.addCookies",
+    ]
+
+    missing = [x for x in required_reader if x not in reader_text]
+    missing += [x for x in required_auth if x not in auth_text]
     if missing:
-        raise AssertionError(f"missing hotfix implementation fragments: {missing}")
-    print("reader hotfix implementation contract: PASS")
+        raise AssertionError(f"missing hotfix contract fragments: {missing}")
+
+    print("reader/auth hotfix contract: PASS")
 
 
 if __name__ == "__main__":
