@@ -24,6 +24,12 @@ The development implementation:
 
 The account itself must legitimately have permission to read the requested chapter.
 
+## Login-required chapters
+
+Some ProComic chapters are restricted by the site to authenticated accounts. Mihon cannot reuse a login session from an external browser because web sessions are stored in the Android WebView profile and cookies are scoped to their domain. The extension therefore provides a source setting named **تسجيل الدخول إلى ProComic** that opens the current `procomic.pro` origin inside Mihon's WebView. Log in there once, then retry the chapter.
+
+This does not unlock premium chapters and does not bypass server authorization. If ProComic still reports that the account is not authorized, the chapter remains inaccessible until the account has legitimate access.
+
 ## Add to Mihon
 
 Use:
