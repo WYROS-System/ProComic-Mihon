@@ -1,12 +1,16 @@
 # ProComic Mihon Repository
 
-A clean, isolated Mihon extension repository for the Arabic ProComic source.
+Clean, isolated distribution repository for the Arabic ProComic Mihon extension.
 
-## Current state
+## Current release
 
-This repository is intentionally kept as a minimal distribution manifest while the Reader/authentication behavior is being audited.
+**ProComic 1.5.6 — versionCode 12**
 
-The repository currently advertises the verified upstream ProComic release **v1.5.1**. No experimental Reader/authentication patch is distributed from this repository.
+This release includes an authenticated Reader fallback that uses a real Android WebView session. When the normal Reader request is denied or returns the site's Safe Browsing/login gate, the extension loads the same chapter in a WebView with JavaScript, DOM storage, cookies, and the site's normal browser session, then extracts the chapter media contract.
+
+Image requests that receive HTTP 401/403 also have a browser-session fallback.
+
+The implementation does not bypass payment, entitlement, login, or server-side authorization. The ProComic account must legitimately have access to the chapter, and any Safe Browsing preference required by ProComic must be changed through the site's own account/settings flow.
 
 ## Add to Mihon
 
@@ -14,20 +18,14 @@ Use:
 
 https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/repo.json
 
-Mihon will resolve the legacy index from:
+## Source and upstream
 
-https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.min.json
+Source: https://procomic.net/
 
-## Source
+Upstream implementation: https://github.com/LoneVertex/mihon-extension-ar-procomic
 
-https://procomic.net/
+## Signing
 
-Upstream implementation:
+The published WYROS APK is signed with the certificate fingerprint stored in repo.json.
 
-https://github.com/LoneVertex/mihon-extension-ar-procomic
-
-## Audit status
-
-The previous WYROS Reader/authentication experiments were removed from the distribution tree because they were not validated end-to-end on a real Mihon device.
-
-The next Reader implementation should first establish the site's actual authentication contract, including the login session, Safe Browsing state, domain/cookie scope, and the exact request that returns the full chapter image manifest.
+The current release was intentionally published as a self-contained custom build. The signing key is not stored in this public repository. Future custom releases need to reuse a persistent private signing key to preserve seamless Android updates.
