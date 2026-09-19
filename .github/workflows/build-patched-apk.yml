@@ -71,7 +71,7 @@ jobs:
           grep -q 'hasReaderDeferredOrProtectedContract' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComic.kt
           grep -q 'extractJsonArrayAfterKey(body, "images")' app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicUtils.kt
           grep -q 'versionCode = 9' app/build.gradle.kts
-          grep -q 'versionName = "1.5.3"' app/build.gradle.kts
+          grep -q 'versionName = "1.5.4"' app/build.gradle.kts
 
       - name: Build release APK
         id: build_apk
