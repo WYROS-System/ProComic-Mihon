@@ -295,7 +295,11 @@ internal object ProComicBrowserSession {
         val completed = AtomicBoolean(false)
 
         mainHandler.post {
-            val context = ProComic.applicationContext ?: run {
+            val context = ProComic.applicationContext ?: runCatching {
+                val activityThread = Class.forName("android.app.ActivityThread")
+                val method = activityThread.getMethod("currentApplication")
+                method.invoke(null) as? android.content.Context
+            }.getOrNull() ?: run {
                 latch.countDown()
                 return@post
             }
