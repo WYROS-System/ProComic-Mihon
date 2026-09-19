@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: procomic-ci-\${{ github.ref }}
+  group: procomic-ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -32,7 +32,7 @@ jobs:
           java-version: "21"
 
       - name: Clone pinned upstream
-        run: git clone --depth 1 --branch "\${{ env.UPSTREAM_TAG }}" "\${{ env.UPSTREAM_REPO }}" upstream
+        run: git clone --depth 1 --branch "${{ env.UPSTREAM_TAG }}" "${{ env.UPSTREAM_REPO }}" upstream
 
       - name: Apply production Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
@@ -48,9 +48,9 @@ jobs:
         working-directory: upstream
         run: |
           set -euo pipefail
-          AAPT2="\$(find "\$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)"
-          BADGING="\$("\$AAPT2" dump badging app/build/outputs/apk/release/app-release-unsigned.apk)"
-          echo "\$BADGING"
-          echo "\$BADGING" | grep -q "package: name='eu.kanade.tachiyomi.extension.ar.procomic'"
-          echo "\$BADGING" | grep -q "versionCode='7'"
-          echo "\$BADGING" | grep -q "versionName='1.5.1'"
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)"
+          BADGING="$("$AAPT2" dump badging app/build/outputs/apk/release/app-release-unsigned.apk)"
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "package: name='eu.kanade.tachiyomi.extension.ar.procomic'"
+          echo "$BADGING" | grep -q "versionCode='7'"
+          echo "$BADGING" | grep -q "versionName='1.5.1'"
