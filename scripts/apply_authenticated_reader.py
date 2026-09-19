@@ -629,21 +629,14 @@ LOGIN_PREF_REPLACEMENT = '''    override fun setupPreferenceScreen(screen: Prefe
             setOnPreferenceClickListener {
                 runCatching {
                     val activityClass = Class.forName("eu.kanade.tachiyomi.ui.webview.WebViewActivity")
-                    val companion = activityClass.getDeclaredField("Companion").get(null)
-                    val newIntent = companion.javaClass.getMethod(
-                        "newIntent",
-                        android.content.Context::class.java,
-                        String::class.java,
-                        java.lang.Long::class.java,
-                        String::class.java,
-                    )
-                    val intent = newIntent.invoke(
-                        companion,
-                        screen.context,
-                        "https://procomic.pro/ar",
-                        id,
-                        name,
-                    ) as android.content.Intent
+                    val intent = android.content.Intent(screen.context, activityClass).apply {
+                        addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        putExtra("url_key", "https://procomic.pro/ar")
+                        putExtra("title_key", name)
+                    }
+                    if (screen.context !is android.app.Activity) {
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                     screen.context.startActivity(intent)
                 }.onFailure {
                     throw IllegalStateException("ProComic: could not open Mihon WebView login", it)
