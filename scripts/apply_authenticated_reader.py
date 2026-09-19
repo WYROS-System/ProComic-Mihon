@@ -301,6 +301,7 @@ internal object ProComicBrowserSession {
                         premium: /Premium chapter|Unlock now for|محتوى مميز|افتح الفصل الآن/i.test(body),
                         login:
                           /please log in to read|log in to read|login required to read|you must log in to read|سجل الدخول لقراءة|تسجيل الدخول لقراءة|يرجى تسجيل الدخول لقراءة|يجب تسجيل الدخول للقراءة|هذا المحتوى مقيد/i.test(body) ||
+                          /please log in to read|login required to read|you must log in to read|سجل الدخول لقراءة|تسجيل الدخول لقراءة|يرجى تسجيل الدخول لقراءة|يجب تسجيل الدخول للقراءة/i.test(contract) ||
                           /\\/(login|signin|sign-in)(?:[/?#]|$)/i.test(location.pathname),
                         localSafe,
                         windowSafe,
@@ -624,6 +625,7 @@ LOGIN_PREF_REPLACEMENT = '''    override fun setupPreferenceScreen(screen: Prefe
             key = "procomic_login"
             title = "تسجيل الدخول إلى ProComic"
             summary = "يفتح ProComic داخل WebView الخاص بـ Mihon. سجّل الدخول على procomic.pro حتى تستخدم الفصول التي تتطلب حسابًا."
+            setOnPreferenceChangeListener { _, _ -> false }
             setOnPreferenceClickListener {
                 runCatching {
                     val activityClass = Class.forName("eu.kanade.tachiyomi.ui.webview.WebViewActivity")
