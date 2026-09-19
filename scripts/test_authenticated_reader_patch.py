@@ -68,6 +68,13 @@ def main() -> None:
 
     pro_text = pro.read_text(encoding="utf-8")
     require(pro, "ProComicBrowserSession.loadChapterContract", "authenticated page fallback")
+    require(pro, "val initialHasValidImages = runCatching", "decoded-image validity probe")
+    require(pro, "!initialHasValidImages ||", "browser fallback uses decoded-image validity")
+    require(pro, "initialHasValidImages && !initialRedirectedAway", "normal Reader body uses decoded-image validity")
+    if "!initialHasImages ||" in pro_text:
+        raise AssertionError("browser fallback still uses the appImages marker alone")
+    if "initialHasImages && !initialRedirectedAway" in pro_text:
+        raise AssertionError("normal Reader branch still uses the appImages marker alone")
     require(pro, "browserNetworkClient", "browser-aware OkHttp client")
     require(pro, "ProComicImageInterceptor(browserNetworkClient)", "protected Reader client propagation")
     require(pro, "Triple(browserBody, recoveredUrl, recoveredHost)", "browser contract branch")
