@@ -2,6 +2,16 @@ name: Publish authenticated ProComic
 
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Release version name"
+        required: true
+        type: string
+      version_code:
+        description: "Release version code; must be greater than the repository value"
+        required: true
+        type: number
+
 
 permissions:
   contents: write
@@ -13,11 +23,11 @@ concurrency:
 env:
   UPSTREAM_REPO: https://github.com/LoneVertex/mihon-extension-ar-procomic.git
   UPSTREAM_TAG: v1.5.1
+  UPSTREAM_COMMIT: 0e3eeef72449525f9f61ccb8506e69a4c51f4855
   PACKAGE: eu.kanade.tachiyomi.extension.ar.procomic
-  VERSION_CODE: "12"
-  VERSION_NAME: "1.5.6"
-  APK_NAME: procomic-wyros-v1.5.6.apk
   SOURCE_ID: "6818345659309721544"
+  APK_PREFIX: procomic-wyros-v
+  REPO_RAW_BASE: https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main
 
 jobs:
   publish:
@@ -35,22 +45,52 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Clone verified upstream
-        run: git clone --depth 1 --branch "${UPSTREAM_TAG}" "${UPSTREAM_REPO}" upstream
+      - name: Validate release version
+        env:
+          VERSION_NAME: "${{ inputs.version_name }}"
+          VERSION_CODE: "${{ inputs.version_code }}"
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          code = int(os.environ["VERSION_CODE"])
+          name = os.environ["VERSION_NAME"].strip()
+          if code <= 0 or not name:
+              raise SystemExit("invalid version inputs")
+          entries = [x for x in json.loads(Path("index.min.json").read_text()) if x["pkg"] == os.environ["PACKAGE"]]
+          current = max(int(x["code"]) for x in entries)
+          if code <= current:
+              raise SystemExit(f"versionCode {code} must be greater than current {current}")
+          print(f"release {name} code {code}; current {current}")
+          PY
+
+      - name: Clone exact upstream baseline
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${UPSTREAM_TAG}" "${UPSTREAM_REPO}" upstream
+          test "$(git -C upstream rev-parse HEAD)" = "${UPSTREAM_COMMIT}"
 
       - name: Apply authenticated Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
 
+      - name: Run authenticated Reader contract tests
+        run: python3 scripts/test_authenticated_reader_patch.py --upstream upstream
+
       - name: Set release metadata
         working-directory: upstream
+        env:
+          VERSION_NAME: "${{ inputs.version_name }}"
+          VERSION_CODE: "${{ inputs.version_code }}"
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import os
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace('versionCode = 7', 'versionCode = 12', 1)
-          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.6"', 1)
+          s = s.replace('versionCode = 7', f'versionCode = {int(os.environ["VERSION_CODE"])}', 1)
+          s = s.replace('versionName = "1.5.1"', f'versionName = "{os.environ["VERSION_NAME"]}"', 1)
           p.write_text(s)
           PY
 
@@ -58,56 +98,71 @@ jobs:
         working-directory: upstream
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
+      - name: Verify persistent signing secrets
+        env:
+          KEYSTORE_B64: "${{ secrets.WYROS_PROCOMIC_KEYSTORE_B64 }}"
+          KEYSTORE_PASSWORD: "${{ secrets.WYROS_PROCOMIC_KEYSTORE_PASSWORD }}"
+          KEY_ALIAS: "${{ secrets.WYROS_PROCOMIC_KEY_ALIAS }}"
+          KEY_PASSWORD: "${{ secrets.WYROS_PROCOMIC_KEY_PASSWORD }}"
+          SIGNING_FINGERPRINT: "${{ secrets.WYROS_PROCOMIC_SIGNING_FINGERPRINT }}"
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_B64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          printf "%s" "$SIGNING_FINGERPRINT" | grep -Eq "^[0-9a-fA-F]{64}$"
+
       - name: Sign and publish manifest
         env:
           APKTOOL_APK: upstream/app/build/outputs/apk/release/app-release-unsigned.apk
+          KEYSTORE_B64: "${{ secrets.WYROS_PROCOMIC_KEYSTORE_B64 }}"
+          KEYSTORE_PASSWORD: "${{ secrets.WYROS_PROCOMIC_KEYSTORE_PASSWORD }}"
+          KEY_ALIAS: "${{ secrets.WYROS_PROCOMIC_KEY_ALIAS }}"
+          KEY_PASSWORD: "${{ secrets.WYROS_PROCOMIC_KEY_PASSWORD }}"
+          VERSION_CODE: "${{ inputs.version_code }}"
+          VERSION_NAME: "${{ inputs.version_name }}"
         run: |
           set -euo pipefail
-
           AAPT2="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)"
-          test -x "$AAPT2"
-          test -x "$APKSIGNER"
-          test -x "$ZIPALIGN"
-
-          KS="$(mktemp -u --suffix=.jks)"
-          PASS="$(openssl rand -hex 32)"
-
-          keytool -genkeypair -v             -keystore "$KS"             -storepass "$PASS"             -keypass "$PASS"             -alias wyros             -keyalg RSA             -keysize 4096             -validity 10000             -dname "CN=WYROS ProComic,O=WYROS,C=EG"
-
+          test -x "$AAPT2" && test -x "$APKSIGNER" && test -x "$ZIPALIGN"
+          KS="$RUNNER_TEMP/wyros-procomic-release.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KS"
+          test -s "$KS"
+          keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           mkdir -p apk
-          find apk -type f -delete
-          "$ZIPALIGN" -f -p 4 "$APKTOOL_APK" /tmp/aligned.apk
-
-          "$APKSIGNER" sign             --ks "$KS"             --ks-key-alias wyros             --ks-pass "pass:$PASS"             --key-pass "pass:$PASS"             --out "apk/$APK_NAME"             /tmp/aligned.apk
-
+          find apk -maxdepth 1 -type f -delete
+          APK_NAME="${APK_PREFIX}${VERSION_NAME}.apk"
+          ALIGNED="$RUNNER_TEMP/procomic-aligned.apk"
+          "$ZIPALIGN" -f -p 4 "$APKTOOL_APK" "$ALIGNED"
+          "$APKSIGNER" sign \
+            --ks "$KS" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "env:KEYSTORE_PASSWORD" \
+            --key-pass "env:KEY_PASSWORD" \
+            --out "apk/$APK_NAME" \
+            "$ALIGNED"
           "$APKSIGNER" verify --verbose --print-certs "apk/$APK_NAME"
-
-          BADGING="$("$AAPT2" dump badging "apk/$APK_NAME")"
+          BADGING="$($AAPT2 dump badging "apk/$APK_NAME")"
           echo "$BADGING" | grep -q "package: name='$PACKAGE'"
           echo "$BADGING" | grep -q "versionCode='$VERSION_CODE'"
           echo "$BADGING" | grep -q "versionName='$VERSION_NAME'"
-
-          keytool -exportcert -rfc             -keystore "$KS"             -storepass "$PASS"             -alias wyros > /tmp/wyros-cert.pem
-
-          FINGERPRINT="$(
-            openssl x509 -in /tmp/wyros-cert.pem -outform DER |
-              openssl dgst -sha256 -binary |
-              xxd -p -c 256
-          )"
+          keytool -exportcert -rfc -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > "$RUNNER_TEMP/cert.pem"
+          FINGERPRINT="$(openssl x509 -in "$RUNNER_TEMP/cert.pem" -outform DER | openssl dgst -sha256 -binary | xxd -p -c 256)"
           test "${#FINGERPRINT}" -eq 64
-          echo "signing fingerprint: $FINGERPRINT"
-
+          test "$FINGERPRINT" = "${SIGNING_FINGERPRINT,,}"
           APK_SHA256="$(sha256sum "apk/$APK_NAME" | cut -d' ' -f1)"
-
+          echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+          echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
+          echo "SIGNING_FINGERPRINT=$FINGERPRINT" >> "$GITHUB_ENV"
           cat > index.min.json <<EOF
-          [{"name":"ProComic","pkg":"$PACKAGE","apk":"https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/$APK_NAME","lang":"ar","code":$VERSION_CODE,"version":"$VERSION_NAME","nsfw":0}]
+          [{"name":"ProComic","pkg":"$PACKAGE","apk":"$REPO_RAW_BASE/apk/$APK_NAME","lang":"ar","code":$VERSION_CODE,"version":"$VERSION_NAME","nsfw":0}]
           EOF
-
           cat > repo.json <<EOF
           {
-            "index_v2": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.pb",
+            "index_v2": "$REPO_RAW_BASE/index.pb",
             "meta": {
               "name": "WYROS ProComic",
               "shortName": "WYROS",
@@ -116,88 +171,39 @@ jobs:
             }
           }
           EOF
-
           python3 - <<'PY'
           from pathlib import Path
-          import gzip
-          import json
-          import os
-
-          def varint(n: int) -> bytes:
-              out = bytearray()
-              while n >= 0x80:
-                  out.append((n & 0x7f) | 0x80)
-                  n >>= 7
-              out.append(n)
-              return bytes(out)
-
-          def scalar(num: int, value: int) -> bytes:
-              return varint((num << 3) | 0) + varint(value)
-
-          def text(num: int, value: str) -> bytes:
-              raw = value.encode()
-              return varint((num << 3) | 2) + varint(len(raw)) + raw
-
-          def msg(num: int, value: bytes) -> bytes:
-              return varint((num << 3) | 2) + varint(len(value)) + value
-
-          package = os.environ["PACKAGE"]
-          version_code = int(os.environ["VERSION_CODE"])
-          version_name = os.environ["VERSION_NAME"]
-          apk_name = os.environ["APK_NAME"]
-          source_id = int(os.environ["SOURCE_ID"])
-
-          # Read fingerprint produced by the signing step.
-          repo = json.loads(Path("repo.json").read_text())
-          fingerprint = repo["meta"]["signingKeyFingerprint"]
-
-          resources = (
-              text(1, f"https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/{apk_name}") +
-              text(2, "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/icon/eu.kanade.tachiyomi.extension.ar.procomic.png")
-          )
-
-          source = (
-              scalar(1, source_id) +
-              text(2, "ProComic") +
-              text(3, "ar") +
-              text(4, "https://procomic.pro")
-          )
-
-          extension = (
-              text(1, "ProComic") +
-              text(2, package) +
-              msg(3, resources) +
-              text(4, "1.6") +
-              scalar(5, version_code) +
-              text(6, version_name) +
-              scalar(7, 1) +
-              msg(8, source)
-          )
-
-          extension_list = msg(1, extension)
-          contact = text(1, "https://github.com/WYROS-System/ProComic-Mihon")
-          index = (
-              text(1, "WYROS ProComic") +
-              text(2, "WYROS") +
-              text(3, fingerprint) +
-              msg(4, contact) +
-              msg(101, extension_list)
-          )
-
+          import json, os
+          def varint(n):
+              out=bytearray()
+              while n>=0x80: out.append((n&0x7f)|0x80); n>>=7
+              out.append(n); return bytes(out)
+          def scalar(num,value): return varint((num<<3)|0)+varint(value)
+          def text(num,value):
+              raw=value.encode(); return varint((num<<3)|2)+varint(len(raw))+raw
+          def msg(num,value): return varint((num<<3)|2)+varint(len(value))+value
+          package=os.environ["PACKAGE"]; code=int(os.environ["VERSION_CODE"]); name=os.environ["VERSION_NAME"]
+          apk=os.environ["APK_NAME"]; source_id=int(os.environ["SOURCE_ID"]); raw=os.environ["REPO_RAW_BASE"]
+          fingerprint=json.loads(Path("repo.json").read_text())["meta"]["signingKeyFingerprint"]
+          resources=text(1,f"{raw}/apk/{apk}")+text(2,f"{raw}/icon/eu.kanade.tachiyomi.extension.ar.procomic.png")
+          source=scalar(1,source_id)+text(2,"ProComic")+text(3,"ar")+text(4,"https://procomic.pro")
+          extension=text(1,"ProComic")+text(2,package)+msg(3,resources)+text(4,"1.6")+scalar(5,code)+text(6,name)+scalar(7,1)+msg(8,source)
+          index=text(1,"WYROS ProComic")+text(2,"WYROS")+text(3,fingerprint)+msg(4,text(1,"https://github.com/WYROS-System/ProComic-Mihon"))+msg(101,msg(1,extension))
           Path("index.pb").write_bytes(index)
           PY
-
-          rm -f "$KS" /tmp/wyros-cert.pem /tmp/aligned.apk
-
       - name: Verify published tree
         run: |
           set -euo pipefail
           test -s "apk/$APK_NAME"
           test -s index.pb
-          grep -q "\"index_v2\"" repo.json
+          test -s index.min.json
+          test -s repo.json
           grep -q "\"$VERSION_NAME\"" index.min.json
           grep -q "signingKeyFingerprint" repo.json
-          git status --short
+
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/wyros-procomic-release.jks" "$RUNNER_TEMP/cert.pem" "$RUNNER_TEMP/procomic-aligned.apk"
 
       - name: Commit publication
         run: |
@@ -205,9 +211,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apk index.pb index.min.json repo.json
-          if git diff --cached --quiet; then
-            echo "No publication changes."
-            exit 0
-          fi
-          git commit -m "release: ProComic $VERSION_NAME authenticated Reader"
+          git commit -m "release: ProComic ${{ inputs.version_name }} authenticated Reader"
           git push origin HEAD:main
