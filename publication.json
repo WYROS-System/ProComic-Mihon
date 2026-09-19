@@ -4,8 +4,8 @@
   "language": "ar",
   "versionCode": 10,
   "versionName": "1.5.4",
-  "apk": "procomic-release-v1.5.4.apk",
-  "sha256": "d4884c6a2801d03e6bca0f2b7e76d584fd3f567be7327571aeb422cf0bd76738",
-  "signingKeyFingerprint": "3c6f8d68f9bd7d38dca4ba22a8c190c441f6525804c2fe8440dae4de602d29e0",
+  "apk": "procomic-wyros-v1.5.4.apk",
+  "sha256": "79ebe34e603888e7ad36ddc16bc1a60b2c382b1cdc315e6cdc40f06b12fba44b",
+  "signingKeyFingerprint": "861c0ac3c08385cbafb178b163c679f7164887def272fdc9ed003efc40db6293",
   "sourceUrl": "https://procomic.pro"
 }
