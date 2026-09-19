@@ -74,14 +74,8 @@ jobs:
       - name: Apply authenticated Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
 
-      - name: Apply valid-image Reader hotfix
-        run: python3 scripts/apply_reader_valid_image_hotfix.py upstream
-
       - name: Run authenticated Reader contract tests
         run: python3 scripts/test_authenticated_reader_patch.py --upstream upstream
-
-      - name: Run valid-image Reader hotfix tests
-        run: python3 scripts/test_reader_valid_image_hotfix.py --upstream upstream
 
       - name: Set release metadata
         working-directory: upstream
