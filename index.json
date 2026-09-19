@@ -1,7 +1,7 @@
 {
   "name": "WYROS ProComic",
   "badgeLabel": "WYROS",
-  "signingKey": "fa8352b9fee9c32a9f9b88af35aa421e80d2773b762d027ce25a4928571795aa",
+  "signingKey": "bb3556d3c972ee4b5dd5667db4828dd04195e7d89e404303ad65b96761782af3",
   "contact": {
     "website": "https://github.com/WYROS-System/ProComic-Mihon"
   },
@@ -11,12 +11,12 @@
         "name": "ProComic",
         "packageName": "eu.kanade.tachiyomi.extension.ar.procomic",
         "resources": {
-          "apkUrl": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/procomic-release-v1.5.3.apk",
+          "apkUrl": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/procomic-release-v1.5.4.apk",
           "iconUrl": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/icon/eu.kanade.tachiyomi.extension.ar.procomic.png"
         },
         "extensionLib": "1.6",
-        "versionCode": "9",
-        "versionName": "1.5.3",
+        "versionCode": "10",
+        "versionName": "1.5.4",
         "contentWarning": "CONTENT_WARNING_SAFE",
         "sources": [
           {
