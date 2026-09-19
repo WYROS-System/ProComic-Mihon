@@ -53,7 +53,9 @@ def main() -> None:
     forbid(session, "document.cookie =", "fake/manual auth cookie injection")
     forbid(session, "safeBrowsingEnabled = false", "Safe Browsing bypass")
     forbid(session, "entitlement", "entitlement bypass")
-    forbid(session, "Unlock now", "premium unlock injection")
+    forbid(session, "unlockChapter", "premium unlock injection")
+    forbid(session, "purchaseChapter", "premium purchase injection")
+    forbid(session, "coins:0", "premium purchase injection")
 
     require(interceptor, "response.code !in setOf(401, 403)", "image fallback scope")
     require(interceptor, "fetchBinary", "image browser fallback")
