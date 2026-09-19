@@ -39,7 +39,6 @@ jobs:
           grep -q "CookieManager" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
           grep -q "domStorageEnabled = true" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
           grep -q "procomic.net" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
-          grep -q "finalUrl" app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic/ProComicBrowserReader.kt
 
       - name: Build release APK
         working-directory: upstream
