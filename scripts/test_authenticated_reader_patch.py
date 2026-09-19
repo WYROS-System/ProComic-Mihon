@@ -68,6 +68,11 @@ def main() -> None:
 
     pro_text = pro.read_text(encoding="utf-8")
     require(pro, "ProComicBrowserSession.loadChapterContract", "authenticated page fallback")
+    require(pro, "Preference(screen.context)", "ProComic login preference")
+    require(pro, "تسجيل الدخول إلى ProComic", "ProComic login entry")
+    require(pro, "eu.kanade.tachiyomi.ui.webview.WebViewActivity", "Mihon WebView login activity")
+    require(pro, "https://procomic.pro/ar", "login uses Reader origin")
+    require(pro, "newIntent", "Mihon WebView intent helper")
     require(pro, "val initialHasValidImages = runCatching", "decoded-image validity probe")
     require(pro, "!initialHasValidImages ||", "browser fallback uses decoded-image validity")
     require(pro, "initialHasValidImages && !initialRedirectedAway", "normal Reader body uses decoded-image validity")
