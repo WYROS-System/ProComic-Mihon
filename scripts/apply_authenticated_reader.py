@@ -624,8 +624,6 @@ LOGIN_PREF_REPLACEMENT = '''    override fun setupPreferenceScreen(screen: Prefe
             key = "procomic_login"
             title = "تسجيل الدخول إلى ProComic"
             summary = "يفتح ProComic داخل WebView الخاص بـ Mihon. سجّل الدخول على procomic.pro حتى تستخدم الفصول التي تتطلب حسابًا."
-            isPersistent = false
-            widgetLayoutResource = 0
             setOnPreferenceClickListener {
                 runCatching {
                     val activityClass = Class.forName("eu.kanade.tachiyomi.ui.webview.WebViewActivity")
