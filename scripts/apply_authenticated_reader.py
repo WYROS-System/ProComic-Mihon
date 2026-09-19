@@ -29,6 +29,7 @@ data class ProComicBrowserReaderResult(
     val imageUrls: List<String>,
     val contractText: String,
     val blockedReason: String?,
+    val finalUrl: String?,
 )
 
 object ProComicBrowserReader {
@@ -94,7 +95,16 @@ object ProComicBrowserReader {
                             "img1.procomic.pro","img2.procomic.pro","img3.procomic.pro","img4.procomic.pro",
                             "img1.procomic.net","img2.procomic.net","img3.procomic.net","img4.procomic.net"];
                           const exts = ["avif","webp","jpg","jpeg","png"];
-                          if (u.protocol === "https:" && hosts.includes(host) && exts.includes(ext)) {
+                          const chapterMedia =
+                            path.includes("/chapters/") ||
+                            /^\/\d+\/\d+\//.test(path) ||
+                            path.startsWith("/i/");
+                          if (
+                            u.protocol === "https:" &&
+                            hosts.includes(host) &&
+                            exts.includes(ext) &&
+                            chapterMedia
+                          ) {
                             urls.push(u.href);
                           }
                         } catch (_) {}
@@ -151,9 +161,9 @@ object ProComicBrowserReader {
                     }
 
                     if (urls.size >= requiredImageCount) {
-                        finish(ProComicBrowserReaderResult(urls, scripts, null))
+                        finish(ProComicBrowserReaderResult(urls, scripts, null, webView.url))
                     } else if (blocked != null) {
-                        finish(ProComicBrowserReaderResult(urls, scripts, blocked))
+                        finish(ProComicBrowserReaderResult(urls, scripts, blocked, webView.url))
                     } else {
                         handler.postDelayed(::inspect, POLL_MS)
                     }
@@ -162,7 +172,6 @@ object ProComicBrowserReader {
 
             webView.settings.javaScriptEnabled = true
             webView.settings.domStorageEnabled = true
-            webView.settings.databaseEnabled = true
             webView.settings.loadsImagesAutomatically = true
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
@@ -177,7 +186,12 @@ object ProComicBrowserReader {
                 }
             }
 
-            webView.loadUrl(url)
+            val browserUrl = if (url.contains("://procomic.pro/")) {
+                url.replace("://procomic.pro/", "://procomic.net/")
+            } else {
+                url
+            }
+            webView.loadUrl(browserUrl)
             handler.postDelayed(::inspect, 1000L)
             handler.postDelayed({
                 if (!finished.get()) {
@@ -186,6 +200,7 @@ object ProComicBrowserReader {
                             emptyList(),
                             "",
                             "Authenticated WebView Reader timed out",
+                            webView.url,
                         ),
                     )
                 }
@@ -193,11 +208,11 @@ object ProComicBrowserReader {
         }
 
         if (!latch.await(TIMEOUT_SECONDS + 5L, TimeUnit.SECONDS)) {
-            return ProComicBrowserReaderResult(emptyList(), "", "WebView execution timed out")
+            return ProComicBrowserReaderResult(emptyList(), "", "WebView execution timed out", null)
         }
 
         return result.get()
-            ?: ProComicBrowserReaderResult(emptyList(), "", "WebView returned no Reader result")
+            ?: ProComicBrowserReaderResult(emptyList(), "", "WebView returned no Reader result", null)
     }
 
     private fun isAllowedImage(url: String): Boolean = runCatching {
@@ -230,7 +245,7 @@ def apply(root: Path) -> None:
             Page(index, imageUrl = imageUrl)
         }.toMutableList()
 '''
-    page_replacement = '''        val publicImages = ProComicUtils.extractPageImages(body, "PAGES", url)
+    page_replacement = '''        val initialImages = ProComicUtils.extractPageImages(body, "PAGES", url)
 
         val browserResult = if (
             body.contains("Safe Browsing Required", ignoreCase = true) ||
@@ -238,12 +253,9 @@ def apply(root: Path) -> None:
             body.contains("هذا المحتوى مقيد", ignoreCase = true)
         ) {
             runCatching {
-                ProComicBrowserReader.load(
-                    url = url,
-                    requiredImageCount = maxOf(publicImages.size + 1, 4),
-                )
+                ProComicBrowserReader.load(url)
             }.onFailure {
-                ProComicDiag.logException("PAGES", "authenticated WebView Reader", url, it)
+                ProComicDiag.logException("PAGES", "authenticated browser Reader", url, it)
             }.getOrNull()
         } else {
             null
@@ -252,25 +264,22 @@ def apply(root: Path) -> None:
         val browserImages = browserResult?.imageUrls.orEmpty()
             .filter(ProComicUtils::isAllowedPageImageUrl)
             .distinct()
-
         val browserContractImages = browserResult?.contractText
             ?.takeIf { it.isNotBlank() }
             ?.let {
-                runCatching {
-                    ProComicUtils.extractPageImages(it, "BROWSER", url)
-                }.getOrDefault(emptyList())
+                runCatching { ProComicUtils.extractPageImages(it, "BROWSER", url) }
+                    .getOrDefault(emptyList())
             }
             .orEmpty()
+        val recoveredImages = (browserImages + browserContractImages).distinct()
 
-        val allBrowserImages = (browserImages + browserContractImages).distinct()
-
-        if (allBrowserImages.size > publicImages.size) {
+        if (recoveredImages.size > initialImages.size) {
             ProComicDiag.logStage(
                 "PAGES",
                 15,
-                "authenticated browser Reader recovered \${allBrowserImages.size} page images",
+                "authenticated browser Reader recovered " + recoveredImages.size + " images",
             )
-            return allBrowserImages.mapIndexed { index, imageUrl ->
+            return recoveredImages.mapIndexed { index, imageUrl ->
                 Page(index, imageUrl = imageUrl)
             }
         }
@@ -279,11 +288,10 @@ def apply(root: Path) -> None:
             ProComicDiag.logStage("PAGES", 14, it)
         }
 
-        val pages = publicImages.mapIndexed { index, imageUrl ->
+        val pages = initialImages.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }.toMutableList()
 '''
-    replace_once(pro, page_anchor, page_replacement)
 
     reader_request_old = '''        val readerHeaders = headersBuilder()
             .set("Referer", "https://procomic.pro/")
