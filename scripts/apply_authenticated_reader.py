@@ -847,12 +847,8 @@ def apply(root: Path) -> None:
     if "androidx.webkit:webkit:" not in gradle_text:
         gradle_text = replace_text_once(
             gradle_text,
-            "dependencies {
-",
-            'dependencies {
-    // Mihon provides AndroidX WebKit at runtime; compile against the same WebView API.
-    compileOnly("androidx.webkit:webkit:1.17.0")
-',
+            "dependencies {\n",
+            'dependencies {\n    // Mihon provides AndroidX WebKit at runtime; compile against the same WebView API.\n    compileOnly("androidx.webkit:webkit:1.17.0")\n',
             "AndroidX WebKit dependency",
         )
         build_gradle.write_text(gradle_text, encoding="utf-8")
