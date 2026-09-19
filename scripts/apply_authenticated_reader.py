@@ -299,7 +299,9 @@ internal object ProComicBrowserSession {
                         contract,
                         safe: /Safe Browsing Required|Log in and disable Safe Browsing|التصفح الآمن/i.test(body),
                         premium: /Premium chapter|Unlock now for|محتوى مميز|افتح الفصل الآن/i.test(body),
-                        login: /please log in|you must log in|سجل الدخول لقراءة|تسجيل الدخول لقراءة|هذا المحتوى مقيد/i.test(body),
+                        login:
+                          /please log in to read|log in to read|login required to read|you must log in to read|سجل الدخول لقراءة|تسجيل الدخول لقراءة|يرجى تسجيل الدخول لقراءة|يجب تسجيل الدخول للقراءة|هذا المحتوى مقيد/i.test(body) ||
+                          /\\/(login|signin|sign-in)(?:[/?#]|$)/i.test(location.pathname),
                         localSafe,
                         windowSafe,
                         cookieSafe,
@@ -592,6 +594,66 @@ CLIENT_REPLACEMENT = '''    private val browserNetworkClient: OkHttpClient by la
         .build()
 '''
 
+LOGIN_IMPORT_ANCHOR = "import androidx.preference.PreferenceScreen\\n"
+LOGIN_IMPORT_REPLACEMENT = "import androidx.preference.PreferenceScreen\\nimport androidx.preference.Preference\\n"
+
+LOGIN_PREF_ANCHOR = '''    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val ctx = screen.context.applicationContext
+        appContext = ctx
+        applicationContext = ctx
+        runCatching { AvifNativeLoader.ensureLoaded(ctx) }
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_PAID_CHAPTERS
+            title = "عرض الفصول المدفوعة"
+            summary = "إظهار جميع الفصول. عند التعطيل، تُخفى الفصول المحددة بوضوح كمقفلة أو مدفوعة فقط."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+    }
+'''
+
+LOGIN_PREF_REPLACEMENT = '''    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        val ctx = screen.context.applicationContext
+        appContext = ctx
+        applicationContext = ctx
+        runCatching { AvifNativeLoader.ensureLoaded(ctx) }
+        SwitchPreferenceCompat(screen.context).apply {
+            key = PREF_SHOW_PAID_CHAPTERS
+            title = "عرض الفصول المدفوعة"
+            summary = "إظهار جميع الفصول. عند التعطيل، تُخفى الفصول المحددة بوضوح كمقفلة أو مدفوعة فقط."
+            setDefaultValue(true)
+        }.also(screen::addPreference)
+
+        Preference(screen.context).apply {
+            title = "تسجيل الدخول إلى ProComic"
+            summary = "يفتح ProComic داخل WebView الخاص بـ Mihon. سجّل الدخول على procomic.pro حتى تستخدم الفصول التي تتطلب حسابًا."
+            setOnPreferenceClickListener {
+                runCatching {
+                    val activityClass = Class.forName("eu.kanade.tachiyomi.ui.webview.WebViewActivity")
+                    val companion = activityClass.getDeclaredField("Companion").get(null)
+                    val newIntent = companion.javaClass.getMethod(
+                        "newIntent",
+                        android.content.Context::class.java,
+                        String::class.java,
+                        java.lang.Long::class.java,
+                        String::class.java,
+                    )
+                    val intent = newIntent.invoke(
+                        companion,
+                        screen.context,
+                        "https://procomic.pro/ar",
+                        id,
+                        name,
+                    ) as android.content.Intent
+                    screen.context.startActivity(intent)
+                }.onFailure {
+                    throw IllegalStateException("ProComic: could not open Mihon WebView login", it)
+                }
+                true
+            }
+        }.also(screen::addPreference)
+    }
+'''
+
 IMAGE_INTERCEPTOR_SOURCE = r'''package eu.kanade.tachiyomi.extension.ar.procomic
 
 import java.io.IOException
@@ -856,6 +918,19 @@ def apply(root: Path) -> None:
         CLIENT_ANCHOR,
         CLIENT_REPLACEMENT,
         "client integration",
+    )
+
+    pro_text = replace_text_once(
+        pro_text,
+        LOGIN_IMPORT_ANCHOR,
+        LOGIN_IMPORT_REPLACEMENT,
+        "login preference import",
+    )
+    pro_text = replace_text_once(
+        pro_text,
+        LOGIN_PREF_ANCHOR,
+        LOGIN_PREF_REPLACEMENT,
+        "ProComic login preference",
     )
     pro_text = replace_text_once(
         pro_text,
