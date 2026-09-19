@@ -652,6 +652,15 @@ def replace_once(path: Path, old: str, new: str) -> None:
         raise SystemExit(f"{path}: expected one anchor, found {text.count(old)}")
     path.write_text(text.replace(old, new), encoding="utf-8")
 
+def replace_function(text: str, signature: str, replacement: str, next_marker: str) -> str:
+    start = text.find(signature)
+    if start < 0:
+        raise SystemExit(f"function signature not found: {signature}")
+    end = text.find(next_marker, start)
+    if end < 0:
+        raise SystemExit(f"function end marker not found: {next_marker}")
+    return text[:start] + replacement.rstrip() + text[end:]
+
 def apply(root: Path) -> None:
     pro = root / PRO
     session = root / SESSION
