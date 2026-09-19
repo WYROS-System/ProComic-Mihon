@@ -453,7 +453,8 @@ internal object ProComicBrowserSession {
         .distinct()
         .sorted()
 }
-'''CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBuilder()
+'''
+CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ProComicImageInterceptor(network.client))
         .build()
 '''
