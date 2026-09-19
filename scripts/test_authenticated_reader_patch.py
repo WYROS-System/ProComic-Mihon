@@ -68,7 +68,8 @@ def main() -> None:
 
     pro_text = pro.read_text(encoding="utf-8")
     require(pro, "ProComicBrowserSession.loadChapterContract", "authenticated page fallback")
-    require(pro, "Preference(screen.context)", "ProComic login preference")
+    require(pro, "SwitchPreferenceCompat(screen.context)", "ProComic login preference")
+    require(pro, 'key = "procomic_login"', "ProComic login preference key")
     require(pro, "تسجيل الدخول إلى ProComic", "ProComic login entry")
     require(pro, "eu.kanade.tachiyomi.ui.webview.WebViewActivity", "Mihon WebView login activity")
     require(pro, "https://procomic.pro/ar", "login uses Reader origin")
