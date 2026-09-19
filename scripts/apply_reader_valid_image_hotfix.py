@@ -10,13 +10,11 @@ PRO_REL = Path(
 )
 
 PROBE_RE = re.compile(
-    r'(?m)^        val initialHasImages =.*\n'
-    r'^        val initialRedirectedAway =.*\n\n'
+    r'(?m)^        val initialRedirectedAway =.*\n\n'
     r'(?=        val browserResult = if \()'
 )
 
-PROBE_REPLACEMENT = """        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\\\"appImages\\\\\"")
-        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
+PROBE_REPLACEMENT = """        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
         // The marker alone is not sufficient: a challenge/error document can contain
         // the appImages marker while yielding zero valid page URLs. Probe the real parser
         // before deciding that the normal OkHttp response is usable.
