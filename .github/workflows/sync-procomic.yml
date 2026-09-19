@@ -76,7 +76,7 @@ jobs:
           test -x "$APKSIGNER"
           test -x "$ZIPALIGN"
 
-          KS="$(mktemp --suffix=.jks)"
+          KS="$(mktemp -u --suffix=.jks)"
           PASS="$(openssl rand -hex 32)"
 
           keytool -genkeypair -v             -keystore "$KS"             -storepass "$PASS"             -keypass "$PASS"             -alias wyros             -keyalg RSA             -keysize 4096             -validity 10000             -dname "CN=WYROS ProComic,O=WYROS,C=EG"
@@ -192,15 +192,6 @@ jobs:
           Path("index.pb").write_bytes(index)
           PY
 
-          cat > publication.txt <<EOF
-          package=$PACKAGE
-          versionCode=$VERSION_CODE
-          versionName=$VERSION_NAME
-          apk=$APK_NAME
-          sha256=$APK_SHA256
-          signingKeyFingerprint=$FINGERPRINT
-          EOF
-
           rm -f "$KS" /tmp/wyros-cert.pem /tmp/aligned.apk
 
       - name: Verify published tree
@@ -218,7 +209,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apk index.pb index.min.json repo.json publication.txt
+          git add apk index.pb index.min.json repo.json
           if git diff --cached --quiet; then
             echo "No publication changes."
             exit 0
