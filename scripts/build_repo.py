@@ -63,9 +63,9 @@ def extension_message(version_code, version_name, apk_name, fingerprint):
 
 
 
-PATCHED_VERSION_CODE = 9
-PATCHED_VERSION_NAME = "1.5.3"
-PATCHED_APK_NAME = "procomic-release-v1.5.3.apk"
+PATCHED_VERSION_CODE = 10
+PATCHED_VERSION_NAME = "1.5.4"
+PATCHED_APK_NAME = "procomic-release-v1.5.4.apk"
 UPSTREAM_REPO = "https://github.com/LoneVertex/mihon-extension-ar-procomic.git"
 
 
