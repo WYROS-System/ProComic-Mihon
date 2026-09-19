@@ -2,10 +2,10 @@
   "package": "eu.kanade.tachiyomi.extension.ar.procomic",
   "name": "ProComic",
   "language": "ar",
-  "versionCode": 10,
-  "versionName": "1.5.4",
-  "apk": "procomic-wyros-v1.5.4.apk",
-  "sha256": "79ebe34e603888e7ad36ddc16bc1a60b2c382b1cdc315e6cdc40f06b12fba44b",
-  "signingKeyFingerprint": "861c0ac3c08385cbafb178b163c679f7164887def272fdc9ed003efc40db6293",
+  "versionCode": 11,
+  "versionName": "1.5.5",
+  "apk": "procomic-wyros-v1.5.5.apk",
+  "sha256": "2c50f6a28d40235e0cf34cda98a3b2bf2ff468ef06bd19d0fbd97075c5444a10",
+  "signingKeyFingerprint": "90d842cb97814e7a84dc021e52a95be2875f0644c863bcbc0c58a708a2f0b4d1",
   "sourceUrl": "https://procomic.pro"
 }
