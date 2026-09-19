@@ -125,10 +125,15 @@ object ProComicBrowserReader {
                         .map((s) => s.textContent || "")
                         .filter((s) => /appImages|deferredMedia|protectionV2|chapter-map-proxy-plan/.test(s))
                         .join("\\n");
+                      const html = document.documentElement ? document.documentElement.outerHTML : "";
+                      const contract = [scripts, html]
+                        .filter(Boolean)
+                        .join("\\n")
+                        .slice(0, 1400000);
                       const bodyText = (document.body && document.body.innerText || "").slice(0, 2000);
                       return JSON.stringify({
                         urls: Array.from(new Set(urls)),
-                        scripts: scripts.slice(0, 900000),
+                        scripts: contract,
                         bodyText: bodyText
                       });
                     })()
