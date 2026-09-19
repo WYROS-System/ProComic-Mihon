@@ -103,8 +103,8 @@ def _set_version(source_root):
     text = gradle_file.read_text(encoding="utf-8")
     if "versionCode = 7" not in text or 'versionName = "1.5.1"' not in text:
         raise SystemExit("unexpected upstream version baseline; refusing automatic patch build")
-    text = text.replace("versionCode = 7", "versionCode = 8", 1)
-    text = text.replace('versionName = "1.5.1"', 'versionName = "1.5.2"', 1)
+    text = text.replace("versionCode = 7", "versionCode = 10", 1)
+    text = text.replace('versionName = "1.5.1"', 'versionName = "1.5.4"', 1)
     gradle_file.write_text(text, encoding="utf-8")
 
 
@@ -186,6 +186,21 @@ def _build_patched_apk():
         shutil.rmtree(work_parent, ignore_errors=True)
 
 
+def _apk_matches_patched_release(apk: Path) -> bool:
+    if not apk.is_file():
+        return False
+    try:
+        build_tools = _latest_build_tools()
+        aapt2 = build_tools / "aapt2"
+        badging = subprocess.check_output([str(aapt2), "dump", "badging", str(apk)], text=True, stderr=subprocess.STDOUT)
+        pkg = next((line.split("name='", 1)[1].split("'", 1)[0] for line in badging.splitlines() if line.startswith("package: name='")), "")
+        code = next((int(part.split("'", 1)[0]) for part in badging.split() if part.startswith("versionCode='")), 0)
+        name = next((part.split("'", 1)[0] for part in badging.split() if part.startswith("versionName='")), "")
+        return pkg == PACKAGE and code == PATCHED_VERSION_CODE and name == PATCHED_VERSION_NAME
+    except (OSError, subprocess.CalledProcessError, ValueError, IndexError):
+        return False
+
+
 def maybe_prepare_patched_release(upstream_version_code, upstream_version_name):
     current = _read_current_publication()
     existing = ROOT / "apk" / PATCHED_APK_NAME
@@ -196,7 +211,7 @@ def maybe_prepare_patched_release(upstream_version_code, upstream_version_name):
         upstream_version_code < PATCHED_VERSION_CODE
         and current
         and int(current.get("versionCode", 0)) >= PATCHED_VERSION_CODE
-        and existing.is_file()
+        and _apk_matches_patched_release(existing)
     ):
         for stale in (ROOT / "apk").glob("*.apk"):
             if stale.name != PATCHED_APK_NAME:
@@ -216,7 +231,7 @@ def maybe_prepare_patched_release(upstream_version_code, upstream_version_name):
     if upstream_version_code >= PATCHED_VERSION_CODE:
         return upstream_version_code, upstream_version_name, None, None
 
-    print("Upstream is older than the WYROS Reader hotfix release; building ProComic 1.5.2.")
+    print("Upstream is older than the WYROS Reader hotfix release; building ProComic 1.5.4.")
     for stale in (ROOT / "apk").glob("*.apk"):
         stale.unlink()
     fingerprint, sha256 = _build_patched_apk()
