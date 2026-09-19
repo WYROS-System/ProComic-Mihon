@@ -37,6 +37,8 @@ def main() -> None:
     require(session, "domStorageEnabled = true", "browser session")
     require(session, "CookieManager.getInstance()", "browser session cookie bridge")
     require(session, "localStorage", "Safe Browsing storage inspection")
+    require(session, 'key === "safe_browsing"', "Safe Browsing cookie inspection")
+    require(session, "hasOrySession", "Ory session state detection")
     require(session, "__SAFE_BROWSING", "Safe Browsing runtime state inspection")
     require(session, "credentials:'include'", "browser fetch credentials")
     require(session, "loadDataWithBaseURL", "same-origin browser fetch")
