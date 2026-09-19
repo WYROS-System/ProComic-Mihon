@@ -59,13 +59,21 @@ def main() -> None:
 
     require(interceptor, "response.code !in setOf(401, 403)", "image fallback scope")
     require(interceptor, "fetchBinary", "image browser fallback")
+    require(interceptor, "fetchJsonPost", "protected map browser fallback")
+    require(interceptor, "chapter-map-proxy-plan", "protected map endpoint handling")
+    require(interceptor, "isAllowedProtectedTileUrl", "protected tile handling")
     forbid(interceptor, "private var webView", "image interceptor race-prone WebView singleton")
 
     pro_text = pro.read_text(encoding="utf-8")
-    print("generated ProComic.kt: browserFallbackCalls=", pro_text.count("ProComicBrowserSession.loadChapterContract"))
-    print("generated ProComic.kt: browserClient=", "browserNetworkClient" in pro_text)
-    print("generated ProComic.kt: cacheControl=", "Cache-Control" in pro_text)
     require(pro, "ProComicBrowserSession.loadChapterContract", "authenticated page fallback")
+    require(pro, "browserNetworkClient", "browser-aware OkHttp client")
+    require(pro, "ProComicImageInterceptor(browserNetworkClient)", "protected Reader client propagation")
+    require(pro, "Triple(browserBody, recoveredUrl, recoveredHost)", "browser contract branch")
+    if pro_text.count("val (body, url, activeHost) =") != 1:
+        raise AssertionError("Reader body decision branch must exist exactly once")
+    if pro_text.count("ProComicBrowserSession.loadChapterContract") != 1:
+        raise AssertionError("authenticated page fallback call must exist exactly once")
+    require(pro, "Cache-Control", "reader cache control")
     require(pro, "ProComicBrowserSession.fetchText", "authenticated deferred-media fallback")
     require(pro, "ProComicWebViewImageInterceptor()", "authenticated image interceptor")
     require(pro, "Safe Browsing Required", "Safe Browsing gate classification")
