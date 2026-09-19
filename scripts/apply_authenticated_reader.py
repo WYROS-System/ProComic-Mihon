@@ -594,9 +594,6 @@ CLIENT_REPLACEMENT = '''    private val browserNetworkClient: OkHttpClient by la
         .build()
 '''
 
-LOGIN_IMPORT_ANCHOR = "import androidx.preference.PreferenceScreen\\n"
-LOGIN_IMPORT_REPLACEMENT = "import androidx.preference.PreferenceScreen\\nimport androidx.preference.Preference\\n"
-
 LOGIN_PREF_ANCHOR = '''    override fun setupPreferenceScreen(screen: PreferenceScreen) {
         val ctx = screen.context.applicationContext
         appContext = ctx
@@ -623,7 +620,7 @@ LOGIN_PREF_REPLACEMENT = '''    override fun setupPreferenceScreen(screen: Prefe
             setDefaultValue(true)
         }.also(screen::addPreference)
 
-        Preference(screen.context).apply {
+        androidx.preference.Preference(screen.context).apply {
             title = "تسجيل الدخول إلى ProComic"
             summary = "يفتح ProComic داخل WebView الخاص بـ Mihon. سجّل الدخول على procomic.pro حتى تستخدم الفصول التي تتطلب حسابًا."
             setOnPreferenceClickListener {
@@ -916,12 +913,6 @@ def apply(root: Path) -> None:
         "client integration",
     )
 
-    pro_text = replace_text_once(
-        pro_text,
-        LOGIN_IMPORT_ANCHOR,
-        LOGIN_IMPORT_REPLACEMENT,
-        "login preference import",
-    )
     pro_text = replace_text_once(
         pro_text,
         LOGIN_PREF_ANCHOR,
