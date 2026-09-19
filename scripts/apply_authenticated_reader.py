@@ -620,9 +620,12 @@ LOGIN_PREF_REPLACEMENT = '''    override fun setupPreferenceScreen(screen: Prefe
             setDefaultValue(true)
         }.also(screen::addPreference)
 
-        androidx.preference.Preference(screen.context).apply {
+        SwitchPreferenceCompat(screen.context).apply {
+            key = "procomic_login"
             title = "تسجيل الدخول إلى ProComic"
             summary = "يفتح ProComic داخل WebView الخاص بـ Mihon. سجّل الدخول على procomic.pro حتى تستخدم الفصول التي تتطلب حسابًا."
+            isPersistent = false
+            widgetLayoutResource = 0
             setOnPreferenceClickListener {
                 runCatching {
                     val activityClass = Class.forName("eu.kanade.tachiyomi.ui.webview.WebViewActivity")
@@ -751,6 +754,7 @@ READER_FALLBACK_ANCHOR = r'''        val initialRedirectedAway = !response.reque
 READER_FALLBACK_REPLACEMENT = r'''        val initialHasValidImages = runCatching {
             ProComicUtils.extractPageImages(initialBody, diagUrl = initialUrl)
         }.getOrNull()?.isNotEmpty() == true
+        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
 
         val browserResult = if (
             response.code in setOf(401, 403) ||
