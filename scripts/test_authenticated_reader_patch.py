@@ -61,6 +61,10 @@ def main() -> None:
     require(interceptor, "fetchBinary", "image browser fallback")
     forbid(interceptor, "private var webView", "image interceptor race-prone WebView singleton")
 
+    pro_text = pro.read_text(encoding="utf-8")
+    print("generated ProComic.kt: browserFallbackCalls=", pro_text.count("ProComicBrowserSession.loadChapterContract"))
+    print("generated ProComic.kt: browserClient=", "browserNetworkClient" in pro_text)
+    print("generated ProComic.kt: cacheControl=", "Cache-Control" in pro_text)
     require(pro, "ProComicBrowserSession.loadChapterContract", "authenticated page fallback")
     require(pro, "ProComicBrowserSession.fetchText", "authenticated deferred-media fallback")
     require(pro, "ProComicWebViewImageInterceptor()", "authenticated image interceptor")
