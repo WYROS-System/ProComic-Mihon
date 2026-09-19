@@ -693,9 +693,13 @@ READER_FALLBACK_ANCHOR = r'''        val initialHasImages = initialBody.contains
 READER_FALLBACK_REPLACEMENT = r'''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
         val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
 
+        val initialHasValidImages = runCatching {
+            ProComicUtils.extractPageImages(initialBody, diagUrl = initialUrl)
+        }.getOrNull()?.isNotEmpty() == true
+
         val browserResult = if (
             response.code in setOf(401, 403) ||
-            !initialHasImages ||
+            !initialHasValidImages ||
             initialBody.contains("Safe Browsing Required", ignoreCase = true) ||
             initialBody.contains("Log in and disable Safe Browsing", ignoreCase = true) ||
             initialBody.contains("هذا المحتوى مقيد", ignoreCase = true)
@@ -738,7 +742,7 @@ BODY_FALLBACK_REPLACEMENT = r'''        val (body, url, activeHost) = if (!brows
                 runCatching { java.net.URI(recoveredUrl).host }.getOrNull() ?: initialHost
             ProComicDiag.logStage("PAGES", 15, "authenticated browser Reader contract recovered")
             Triple(browserBody, recoveredUrl, recoveredHost)
-        } else if (initialHasImages && !initialRedirectedAway) {
+        } else if (initialHasValidImages && !initialRedirectedAway) {
             Triple(initialBody, initialUrl, initialHost)
         } else {'''
 DEFERRED_SIGNATURE = '''    private fun fetchDeferredMedia(
