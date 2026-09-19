@@ -50,6 +50,13 @@ def apply(root: Path) -> None:
 
     source = replace_once(
         source,
+        "            !initialHasImages ||",
+        "            !initialHasValidImages ||",
+        "browser fallback validity condition",
+    )
+
+    source = replace_once(
+        source,
         BODY_OLD,
         BODY_NEW,
         "valid-image body branch",
