@@ -22,7 +22,6 @@ PROBE_REPLACEMENT = """        val initialRedirectedAway = !response.request.url
             ProComicUtils.extractPageImages(initialBody, diagUrl = initialUrl)
         }.getOrNull()?.isNotEmpty() == true
 
-        val browserResult = if (
 """
 
 BODY_OLD = "        } else if (initialHasImages && !initialRedirectedAway) {"
