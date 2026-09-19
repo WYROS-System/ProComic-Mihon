@@ -32,7 +32,7 @@ jobs:
           java-version: "21"
 
       - name: Validate patcher syntax
-        run: python3 -m py_compile scripts/apply_authenticated_reader.py scripts/test_authenticated_reader_patch.py
+        run: python3 -m py_compile scripts/apply_authenticated_reader.py scripts/test_authenticated_reader_patch.py scripts/apply_reader_valid_image_hotfix.py scripts/test_reader_valid_image_hotfix.py
 
       - name: Clone pinned upstream
         run: git clone --depth 1 --branch "${{ env.UPSTREAM_TAG }}" "${{ env.UPSTREAM_REPO }}" upstream
@@ -40,8 +40,14 @@ jobs:
       - name: Apply production Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
 
+      - name: Apply valid-image Reader hotfix
+        run: python3 scripts/apply_reader_valid_image_hotfix.py upstream
+
       - name: Run authenticated Reader contract tests
         run: python3 scripts/test_authenticated_reader_patch.py --upstream upstream
+
+      - name: Run valid-image Reader hotfix tests
+        run: python3 scripts/test_reader_valid_image_hotfix.py --upstream upstream
 
       - name: Compile and package unsigned release
         working-directory: upstream
