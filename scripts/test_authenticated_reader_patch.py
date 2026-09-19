@@ -77,7 +77,7 @@ def main() -> None:
     require(pro, "ProComicBrowserSession.fetchText", "authenticated deferred-media fallback")
     require(pro, "ProComicWebViewImageInterceptor()", "authenticated image interceptor")
     require(pro, "Safe Browsing Required", "Safe Browsing gate classification")
-    require(pro, "Premium chapter is locked by the ProComic server", "premium gate classification")
+    require(session, "Premium chapter is locked by the ProComic server", "premium gate classification")
     require(pro, "Cache-Control", "reader cache control")
     forbid(pro, "requiredImageCount", "image-count success heuristic")
 
