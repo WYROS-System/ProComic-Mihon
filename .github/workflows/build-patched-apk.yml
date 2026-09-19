@@ -48,8 +48,8 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace("versionCode = 7", "versionCode = 10", 1)
-          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.4"', 1)
+          s = s.replace("versionCode = 7", "versionCode = 11", 1)
+          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.5"', 1)
           p.write_text(s)
           PY
           grep -n -E 'versionCode|versionName' app/build.gradle.kts
