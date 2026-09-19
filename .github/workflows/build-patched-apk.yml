@@ -48,7 +48,7 @@ jobs:
           from pathlib import Path
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          s = s.replace("versionCode = 7", "versionCode = 9", 1)
+          s = s.replace("versionCode = 7", "versionCode = 10", 1)
           s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.3"', 1)
           p.write_text(s)
           PY
