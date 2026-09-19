@@ -254,6 +254,7 @@ def apply(root: Path) -> None:
 
     reader_insertion = (
         "        val browserResult = if (\n"
+        "            (!initialHasImages && !initialRedirectedAway) ||\n"
         "            initialBody.contains(\"Safe Browsing Required\", ignoreCase = true) ||\n"
         "            initialBody.contains(\"Log in and disable Safe Browsing\", ignoreCase = true) ||\n"
         "            initialBody.contains(\"هذا المحتوى مقيد\", ignoreCase = true)\n"
