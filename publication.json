@@ -5,7 +5,7 @@
   "versionCode": 10,
   "versionName": "1.5.4",
   "apk": "procomic-release-v1.5.4.apk",
-  "sha256": "807e1718e8995cadf991ad937df7a7124de79c1d60402c7a2bc1d09e07e165a0",
-  "signingKeyFingerprint": "bb3556d3c972ee4b5dd5667db4828dd04195e7d89e404303ad65b96761782af3",
+  "sha256": "d4884c6a2801d03e6bca0f2b7e76d584fd3f567be7327571aeb422cf0bd76738",
+  "signingKeyFingerprint": "3c6f8d68f9bd7d38dca4ba22a8c190c441f6525804c2fe8440dae4de602d29e0",
   "sourceUrl": "https://procomic.pro"
 }
