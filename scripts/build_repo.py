@@ -1,3 +1,4 @@
+# Auth session bridge validation marker
 # Auth bridge release marker: 1.5.5
 #!/usr/bin/env python3
 import argparse, gzip, hashlib, json
