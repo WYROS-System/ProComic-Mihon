@@ -31,9 +31,7 @@ https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.min.jso
 
 The synchronization workflow verifies the upstream GitHub release asset SHA-256, verifies the APK package/version, extracts the APK signing certificate SHA-256 fingerprint, and blocks automatic publication if an already-published signing key changes. This avoids silently changing the trust root.
 
-The workflow mirrors the signed APK instead of creating a new signing key in this repository. It runs on a 6-hour schedule and can also be started manually.
-
-No login bypass, payment bypass, authentication bypass, or WebView automation is introduced by this repository.
+The workflow builds the maintained WYROS Reader variant when upstream is older than the published patched version. The patched Reader bridges the authenticated ProComic WebView session into the extension HTTP requests, including protected-map and tile requests, while preserving normal cookie domain scoping. Login is performed on ProComic itself; the extension does not bypass payment, access controls, or server-side security checks.
 
 ## Verification limits
 
