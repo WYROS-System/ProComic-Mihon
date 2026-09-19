@@ -14,6 +14,9 @@ import argparse
 from pathlib import Path
 
 
+PROCOMIC_IMPORT_ANCHOR = "import eu.kanade.tachiyomi.source.online.HttpSource\n"
+PROCOMIC_IMPORT = "import okhttp3.Interceptor\n"
+
 PROCOMIC_ANCHOR = '''        val publicImages = ProComicUtils.extractPageImages(body, "PAGES", url)
         val pages = publicImages.mapIndexed { index, imageUrl ->
 '''
@@ -38,6 +41,16 @@ PROCOMIC_REPLACEMENT = '''        val publicImages = try {
         val pages = publicImages.mapIndexed { index, imageUrl ->
 '''
 
+CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(ProComicImageInterceptor(network.client))
+        .build()
+'''
+CLIENT_REPLACEMENT = '''    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(ProComicWebViewCookieInterceptor())
+        .addInterceptor(ProComicImageInterceptor(network.client))
+        .build()
+'''
+
 UTILS_ANCHOR = '''    fun resolveRefererForUrl(url: String): String {
         val host = runCatching { URI(url).host?.lowercase() }.getOrNull()
         return if (host != null && host.endsWith(".procomic.net")) {
@@ -53,6 +66,68 @@ UTILS_HELPER = r'''    fun hasReaderDeferredOrProtectedContract(body: String): B
             body.contains("\"deferredMedia\"") ||
             body.contains("\\\"protectionV2\\\"") ||
             body.contains("\"protectionV2\"")
+
+'''
+
+
+WEBVIEW_COOKIE_CLASS = r'''private class ProComicWebViewCookieInterceptor : Interceptor {
+
+    private val allowedHosts = setOf(
+        "procomic.pro",
+        "procomic.net",
+        "app.procomic.pro",
+        "app.procomic.net",
+        "cdn1.procomic.pro",
+        "cdn2.procomic.pro",
+        "cdn3.procomic.pro",
+        "cdn4.procomic.pro",
+        "cdn1.procomic.net",
+        "cdn2.procomic.net",
+        "cdn3.procomic.net",
+        "cdn4.procomic.net",
+    )
+
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        if (request.url.host.lowercase() !in allowedHosts) {
+            return chain.proceed(request)
+        }
+
+        val webViewCookies = runCatching {
+            android.webkit.CookieManager.getInstance().getCookie(request.url.toString())
+        }.getOrNull().orEmpty()
+
+        if (webViewCookies.isBlank()) {
+            return chain.proceed(request)
+        }
+
+        val mergedCookies = mergeCookieHeaders(
+            request.header("Cookie").orEmpty(),
+            webViewCookies,
+        )
+        return chain.proceed(
+            request.newBuilder()
+                .header("Cookie", mergedCookies)
+                .build(),
+        )
+    }
+
+    private fun mergeCookieHeaders(existing: String, webView: String): String {
+        val values = linkedMapOf<String, String>()
+        listOf(existing, webView).forEach { header ->
+            header.split(';').forEach { part ->
+                val separator = part.indexOf('=')
+                if (separator <= 0) return@forEach
+                val name = part.substring(0, separator).trim()
+                val value = part.substring(separator + 1).trim()
+                if (name.isNotEmpty()) {
+                    values[name] = value
+                }
+            }
+        }
+        return values.entries.joinToString("; ") { (name, value) -> "$name=$value" }
+    }
+}
 
 '''
 
@@ -146,7 +221,15 @@ def apply(root: Path) -> None:
         if not path.is_file():
             raise SystemExit(f"missing expected upstream source file: {path}")
 
+    procomic_text = procomic.read_text(encoding="utf-8")
+    if PROCOMIC_IMPORT not in procomic_text:
+        replace_once(procomic, PROCOMIC_IMPORT_ANCHOR, PROCOMIC_IMPORT_ANCHOR + PROCOMIC_IMPORT)
+
     replace_once(procomic, PROCOMIC_ANCHOR, PROCOMIC_REPLACEMENT)
+    replace_once(procomic, CLIENT_ANCHOR, CLIENT_REPLACEMENT)
+    procomic_text = procomic.read_text(encoding="utf-8")
+    if "private class ProComicWebViewCookieInterceptor" not in procomic_text:
+        procomic.write_text(procomic_text + WEBVIEW_COOKIE_CLASS, encoding="utf-8")
     replace_once(utils, UTILS_ANCHOR, UTILS_ANCHOR + UTILS_HELPER)
     replace_once(utils, IMAGES_ANCHOR, IMAGES_REPLACEMENT)
 
