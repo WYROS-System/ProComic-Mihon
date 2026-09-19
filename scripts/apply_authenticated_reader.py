@@ -798,6 +798,7 @@ def apply(root: Path) -> None:
     print("patch debug: bodyAnchorMatches=", pro_text.count(BODY_FALLBACK_ANCHOR))
     replace_once(pro, READER_FALLBACK_ANCHOR, READER_FALLBACK_REPLACEMENT)
     replace_once(pro, BODY_FALLBACK_ANCHOR, BODY_FALLBACK_REPLACEMENT)
+    pro_text = pro.read_text(encoding="utf-8")
     pro_text = replace_function(
         pro_text,
         DEFERRED_SIGNATURE,
