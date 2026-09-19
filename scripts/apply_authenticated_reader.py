@@ -11,7 +11,7 @@ BROWSER = ROOT_REL / "ProComicBrowserReader.kt"
 BROWSER_SOURCE = r'''package eu.kanade.tachiyomi.extension.ar.procomic
 
 import android.annotation.SuppressLint
-import android.app.Application
+import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -20,8 +20,6 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import org.json.JSONTokener
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -37,6 +35,12 @@ object ProComicBrowserReader {
 
     private const val TIMEOUT_SECONDS = 30L
     private const val POLL_MS = 600L
+
+    private fun resolveContext(): Context? = ProComic.applicationContext ?: runCatching {
+        val activityThreadClass = Class.forName("android.app.ActivityThread")
+        val method = activityThreadClass.getMethod("currentApplication")
+        method.invoke(null) as? Context
+    }.getOrNull()
 
     private val hosts = setOf(
         "app.procomic.pro", "app.procomic.net",
@@ -54,7 +58,7 @@ object ProComicBrowserReader {
             "ProComicBrowserReader.load must not run on the main thread"
         }
 
-        val application = Injekt.get<Application>()
+        val application = resolveContext() ?: return ProComicBrowserReaderResult(emptyList(), "", "No Android application context available")
         val latch = CountDownLatch(1)
         val result = AtomicReference<ProComicBrowserReaderResult?>()
         val finished = AtomicBoolean(false)
