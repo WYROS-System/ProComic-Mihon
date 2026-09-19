@@ -1,38 +1,33 @@
 # ProComic Mihon Repository
 
-Dedicated, isolated Mihon extension repository for the Arabic ProComic source.
+A clean, isolated Mihon extension repository for the Arabic ProComic source.
 
-## Source
+## Current state
 
-Runtime content source:
+This repository is intentionally kept as a minimal distribution manifest while the Reader/authentication behavior is being audited.
 
-https://procomic.pro/ar
-
-The published APK is mirrored from the maintained ProComic Mihon implementation:
-https://github.com/LoneVertex/mihon-extension-ar-procomic
-
-The repository is intentionally separate from `WYROS-System/WYROS-System`.
+The repository currently advertises the verified upstream ProComic release **v1.5.1**. No experimental Reader/authentication patch is distributed from this repository.
 
 ## Add to Mihon
 
-Preferred current repository descriptor:
+Use:
 
 https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/repo.json
 
-Direct modern protobuf index:
-
-https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.pb
-
-Legacy JSON index is retained only for older clients:
+Mihon will resolve the legacy index from:
 
 https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.min.json
 
-## Trust and updates
+## Source
 
-The synchronization workflow verifies the upstream GitHub release asset SHA-256, verifies the APK package/version, extracts the APK signing certificate SHA-256 fingerprint, and blocks automatic publication if an already-published signing key changes. This avoids silently changing the trust root.
+https://procomic.net/
 
-The workflow builds the maintained WYROS Reader variant when upstream is older than the published patched version. The patched Reader bridges the authenticated ProComic WebView session into the extension HTTP requests, including protected-map and tile requests, while preserving normal cookie domain scoping. Login is performed on ProComic itself; the extension does not bypass payment, access controls, or server-side security checks.
+Upstream implementation:
 
-## Verification limits
+https://github.com/LoneVertex/mihon-extension-ar-procomic
 
-The upstream project reports passing deterministic software tests and clean APK builds, while direct physical Android-device validation is not something this repository can perform automatically. Mihon itself warns that third-party extensions have broad application access, so only install from repositories you trust.
+## Audit status
+
+The previous WYROS Reader/authentication experiments were removed from the distribution tree because they were not validated end-to-end on a real Mihon device.
+
+The next Reader implementation should first establish the site's actual authentication contract, including the login session, Safe Browsing state, domain/cookie scope, and the exact request that returns the full chapter image manifest.
