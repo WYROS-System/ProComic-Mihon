@@ -226,11 +226,11 @@ object ProComicBrowserReader {
 }
 '''
 
-CLIENT_ANCHOR = '''        override val client: OkHttpClient = network.client.newBuilder()
+CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ProComicImageInterceptor(network.client))
         .build()
 '''
-CLIENT_REPLACEMENT = '''        override val client: OkHttpClient = network.client.newBuilder()
+CLIENT_REPLACEMENT = '''    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ProComicImageInterceptor(network.client))
         .addInterceptor(ProComicWebViewImageInterceptor())
         .build()
