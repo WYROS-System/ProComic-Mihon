@@ -1,26 +1,27 @@
-# Reader hotfix — 2026-09-18
+# ProComic Reader fix
 
-The Android screenshot exposed:
+The Reader had two independent failure modes:
 
-"ProComic Reader: No 'appImages' manifest found in response"
+1. Some responses do not expose a public `appImages` manifest.
+2. Authenticated WebView sessions were not being applied to all Reader HTTP requests.
 
-The source fix is in scripts/apply_reader_hotfix.py. It makes the Reader tolerant of two response variants:
+The current build pipeline applies both fixes.
 
-- plain images[] instead of appImages
-- deferredMedia/protectionV2 without a public appImages manifest
+## Authentication path
 
-The patcher is anchor-checked: it refuses to modify an unexpected upstream source layout.
+After logging in through Mihon's WebView, the extension reads the WebView's ProComic cookies through Android's `CookieManager`. The authenticated cookie header is merged with the existing OkHttp cookie header for requests to the actual ProComic destination URL.
 
-## Apply
+The same session bridge is applied to:
 
-From a checkout of the maintained upstream source:
+- chapter/Reader page-list requests
+- deferred-media requests
+- protected-map requests
+- protected CDN tile requests
 
-    python3 /path/to/ProComic-Mihon/scripts/apply_reader_hotfix.py /path/to/mihon-extension-ar-procomic
+Reader requests also use `Cache-Control: no-cache` so a previously cached guest response is not reused after login.
 
-Then run the upstream deterministic suites and the Android build.
+This does not bypass payment, entitlement, or server-side security controls. The account itself must have access to the chapter.
 
-## Release boundary
+## Release
 
-WYROS-System/ProComic-Mihon currently mirrors the upstream signed v1.5.1 APK. A patched APK has different bytes and therefore requires signing with the extension's release signing key before it can replace the trusted APK. That private signing key is not stored in this repository, so the currently published APK remains unchanged until a properly signed patched release is produced.
-
-The hotfix itself is committed on branch hotfix/reader-missing-appimages-2026-09-18.
+The maintained WYROS release is ProComic 1.5.5 (versionCode 11).
