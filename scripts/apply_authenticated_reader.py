@@ -749,13 +749,9 @@ IMAGE_INTERCEPTOR = ROOT_REL / "ProComicWebViewImageInterceptor.kt"
 LEGACY_READER = ROOT_REL / "ProComicBrowserReader.kt"
 
 
-READER_FALLBACK_ANCHOR = r'''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
-        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
+READER_FALLBACK_ANCHOR = r'''        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
 '''
-READER_FALLBACK_REPLACEMENT = r'''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
-        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
-
-        val initialHasValidImages = runCatching {
+READER_FALLBACK_REPLACEMENT = r'''        val initialHasValidImages = runCatching {
             ProComicUtils.extractPageImages(initialBody, diagUrl = initialUrl)
         }.getOrNull()?.isNotEmpty() == true
 
