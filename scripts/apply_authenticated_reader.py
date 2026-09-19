@@ -128,7 +128,11 @@ internal object ProComicBrowserSession {
         val completed = AtomicBoolean(false)
 
         mainHandler.post {
-            val context = ProComic.applicationContext ?: run {
+            val context = ProComic.applicationContext ?: runCatching {
+                val activityThread = Class.forName("android.app.ActivityThread")
+                val method = activityThread.getMethod("currentApplication")
+                method.invoke(null) as? android.content.Context
+            }.getOrNull() ?: run {
                 latch.countDown()
                 return@post
             }
@@ -177,11 +181,11 @@ internal object ProComicBrowserSession {
                         return out;
                       };
                       let contract = scripts;
-                      if (contract.length > MAX_CONTRACT) contract = collect(scripts).join("\\n");
+                      if (contract.length > __MAX_CONTRACT__) contract = collect(scripts).join("\\n");
                       if (contract.length < MAX_CONTRACT) {
-                        contract += "\\n" + (html.length <= MAX_CONTRACT - contract.length ? html : collect(html).join("\\n"));
+                        contract += "\\n" + (html.length <= __MAX_CONTRACT__ - contract.length ? html : collect(html).join("\\n"));
                       }
-                      contract = contract.slice(0, MAX_CONTRACT);
+                      contract = contract.slice(0, __MAX_CONTRACT__);
                       let localSafe = null;
                       try {
                         for (let i = 0; i < localStorage.length; i++) {
@@ -206,7 +210,7 @@ internal object ProComicBrowserSession {
                         ready: document.readyState === "complete"
                       });
                     })()
-                """.trimIndent().replace("\${" + "MAX_CONTRACT}", MAX_CONTRACT.toString())
+                """.trimIndent().replace("__MAX_CONTRACT__", MAX_CONTRACT.toString())
 
                 webView.evaluateJavascript(js) { raw ->
                     if (completed.get()) return@evaluateJavascript
@@ -507,6 +511,136 @@ class ProComicWebViewImageInterceptor : Interceptor {
     }
 }
 '''
+BUILD_GRADLE = Path("app/build.gradle.kts")
+SESSION = ROOT_REL / "ProComicBrowserSession.kt"
+IMAGE_INTERCEPTOR = ROOT_REL / "ProComicWebViewImageInterceptor.kt"
+LEGACY_READER = ROOT_REL / "ProComicBrowserReader.kt"
+
+CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(ProComicImageInterceptor(network.client))
+        .build()
+'''
+CLIENT_REPLACEMENT = '''    override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(ProComicImageInterceptor(network.client))
+        .addInterceptor(ProComicWebViewImageInterceptor())
+        .build()
+'''
+
+READER_FALLBACK_ANCHOR = '''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
+        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
+'''
+READER_FALLBACK_REPLACEMENT = '''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
+        val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
+
+        val browserResult = if (
+            response.code in setOf(401, 403) ||
+            !initialHasImages ||
+            initialBody.contains("Safe Browsing Required", ignoreCase = true) ||
+            initialBody.contains("Log in and disable Safe Browsing", ignoreCase = true) ||
+            initialBody.contains("هذا المحتوى مقيد", ignoreCase = true)
+        ) {
+            runCatching {
+                ProComicBrowserSession.loadChapterContract(
+                    url = initialUrl,
+                    headers = mapOf(
+                        "Accept-Language" to (response.request.header("Accept-Language") ?: ""),
+                        "Referer" to (response.request.header("Referer") ?: ""),
+                        "User-Agent" to (response.request.header("User-Agent") ?: ""),
+                    ),
+                )
+            }.onFailure {
+                ProComicDiag.logException("PAGES", "authenticated browser Reader", initialUrl, it)
+            }.getOrNull()
+        } else {
+            null
+        }
+
+        browserResult?.stateSummary?.let {
+            ProComicDiag.logStage("PAGES", 14, "browser state: " + it)
+        }
+
+        val browserBody = browserResult?.contractText?.takeIf(String::isNotBlank)
+        if (browserBody.isNullOrBlank() && browserResult?.blockedReason != null) {
+            throw Exception("ProComic Reader: " + browserResult.blockedReason)
+        }
+
+        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {
+            val recoveredUrl = browserResult?.finalUrl ?: initialUrl
+            val recoveredHost =
+                runCatching { java.net.URI(recoveredUrl).host }.getOrNull() ?: initialHost
+            ProComicDiag.logStage("PAGES", 15, "authenticated browser Reader contract recovered")
+            Triple(browserBody, recoveredUrl, recoveredHost)
+        } else if (initialHasImages && !initialRedirectedAway) {'''
+
+DEFERRED_SIGNATURE = '''    private fun fetchDeferredMedia(
+        chapterId: Int,
+        token: String,
+        splitIndex: Int,
+        referer: String,
+        activeHost: String = "procomic.pro",
+    ): ProComicDeferredMediaData {'''
+
+DEFERRED_SOURCE = '''    private fun fetchDeferredMedia(
+        chapterId: Int,
+        token: String,
+        splitIndex: Int,
+        referer: String,
+        activeHost: String = "procomic.pro",
+    ): ProComicDeferredMediaData {
+        val primaryHost = if (activeHost == "procomic.net") "procomic.net" else "procomic.pro"
+        val alternateHost = if (primaryHost == "procomic.pro") "procomic.net" else "procomic.pro"
+        var lastException: Exception? = null
+
+        for (host in listOf(primaryHost, alternateHost)) {
+            val requestUrl = "https://" + host + "/chapter-deferred-media/" + chapterId +
+                "?token=" + URLEncoder.encode(token, "UTF-8") + "&split=" + splitIndex
+            val request = GET(
+                requestUrl,
+                headersBuilder()
+                    .set("Accept", "application/json")
+                    .set("Referer", referer)
+                    .build(),
+            )
+
+            try {
+                return client.newCall(request).execute().use { response ->
+                    if (response.code in setOf(401, 403)) {
+                        val browser = ProComicBrowserSession.fetchText(
+                            url = requestUrl,
+                            referer = referer,
+                            accept = "application/json",
+                        )
+                        if (browser?.status in 200..299 && !browser.textBody.isNullOrBlank()) {
+                            val parsed = ProComicUtils.json.decodeFromString<ProComicDeferredMediaResponse>(
+                                browser.textBody!!,
+                            )
+                            if (parsed.success == false) {
+                                throw Exception("ProComic Reader: deferred media browser response returned success=false")
+                            }
+                            return@use parsed.data
+                                ?: throw Exception("ProComic Reader: deferred media browser response has no data")
+                        }
+                        throw Exception("ProComic Reader: deferred media request denied (" + response.code + ")")
+                    }
+
+                    if (!response.isSuccessful) {
+                        throw Exception("ProComic Reader: deferred media request failed (" + response.code + ")")
+                    }
+
+                    val parsed = ProComicUtils.json.decodeFromString<ProComicDeferredMediaResponse>(
+                        readBoundedBody(response),
+                    )
+                    if (parsed.success == false) {
+                        throw Exception("ProComic Reader: deferred media response returned success=false")
+                    }
+                    parsed.data ?: throw Exception("ProComic Reader: deferred media response has no data")
+                }
+            } catch (e: Exception) {
+                lastException = e
+            }
+        }
+        throw lastException ?: Exception("ProComic Reader: deferred media request failed")
+    }'''
 def replace_once(path: Path, old: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
     if text.count(old) != 1:
