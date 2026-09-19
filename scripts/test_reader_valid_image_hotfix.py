@@ -5,8 +5,8 @@ import argparse
 from pathlib import Path
 
 
-def require(path: Path, text: str, description: str) -> None:
-    if text not in path.read_text(encoding="utf-8"):
+def require(source: str, text: str, description: str) -> None:
+    if text not in source:
         raise AssertionError(f"{description}: missing {text!r}")
 
 
