@@ -690,14 +690,22 @@ READER_FALLBACK_REPLACEMENT = r'''        val initialHasImages = initialBody.con
             throw Exception("ProComic Reader: " + browserResult.blockedReason)
         }
 
-        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {
+'''
+
+
+
+BODY_FALLBACK_ANCHOR = r'''        val (body, url, activeHost) = if (initialHasImages && !initialRedirectedAway) {
+            Triple(initialBody, initialUrl, initialHost)
+        } else {'''
+BODY_FALLBACK_REPLACEMENT = r'''        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {
             val recoveredUrl = browserResult?.finalUrl ?: initialUrl
             val recoveredHost =
                 runCatching { java.net.URI(recoveredUrl).host }.getOrNull() ?: initialHost
             ProComicDiag.logStage("PAGES", 15, "authenticated browser Reader contract recovered")
             Triple(browserBody, recoveredUrl, recoveredHost)
-        } else if (initialHasImages && !initialRedirectedAway) {'''
-
+        } else if (initialHasImages && !initialRedirectedAway) {
+            Triple(initialBody, initialUrl, initialHost)
+        } else {'''
 DEFERRED_SIGNATURE = '''    private fun fetchDeferredMedia(
         chapterId: Int,
         token: String,
@@ -796,6 +804,7 @@ def apply(root: Path) -> None:
 
     pro_text = pro.read_text(encoding="utf-8")
     replace_once(pro, READER_FALLBACK_ANCHOR, READER_FALLBACK_REPLACEMENT)
+    replace_once(pro, BODY_FALLBACK_ANCHOR, BODY_FALLBACK_REPLACEMENT)
     pro_text = replace_function(
         pro_text,
         DEFERRED_SIGNATURE,
