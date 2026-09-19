@@ -101,12 +101,14 @@ jobs:
           KEYSTORE_PASSWORD: "${{ secrets.WYROS_PROCOMIC_KEYSTORE_PASSWORD }}"
           KEY_ALIAS: "${{ secrets.WYROS_PROCOMIC_KEY_ALIAS }}"
           KEY_PASSWORD: "${{ secrets.WYROS_PROCOMIC_KEY_PASSWORD }}"
+          SIGNING_FINGERPRINT: "${{ secrets.WYROS_PROCOMIC_SIGNING_FINGERPRINT }}"
         run: |
           set -euo pipefail
           test -n "$KEYSTORE_B64"
           test -n "$KEYSTORE_PASSWORD"
           test -n "$KEY_ALIAS"
           test -n "$KEY_PASSWORD"
+          printf "%s" "$SIGNING_FINGERPRINT" | grep -Eq "^[0-9a-fA-F]{64}$"
 
       - name: Sign and publish manifest
         env:
@@ -147,6 +149,7 @@ jobs:
           keytool -exportcert -rfc -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > "$RUNNER_TEMP/cert.pem"
           FINGERPRINT="$(openssl x509 -in "$RUNNER_TEMP/cert.pem" -outform DER | openssl dgst -sha256 -binary | xxd -p -c 256)"
           test "${#FINGERPRINT}" -eq 64
+          test "$FINGERPRINT" = "${SIGNING_FINGERPRINT,,}"
           APK_SHA256="$(sha256sum "apk/$APK_NAME" | cut -d' ' -f1)"
           echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
           echo "APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
