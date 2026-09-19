@@ -1,11 +1,6 @@
 name: Publish authenticated ProComic
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/apply_authenticated_reader.py"
-      - ".github/workflows/sync-procomic.yml"
   workflow_dispatch:
 
 permissions:
