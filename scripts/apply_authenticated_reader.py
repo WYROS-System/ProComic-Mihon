@@ -380,7 +380,7 @@ internal object ProComicWebViewFetcher {
     private fun getWebView(): WebView {
         webView?.let { return it }
 
-        return WebView(keiyoushi.utils.applicationContext).also { view ->
+        return WebView(resolveContext()).also { view ->
             view.settings.javaScriptEnabled = true
             view.settings.domStorageEnabled = true
             view.settings.databaseEnabled = true
