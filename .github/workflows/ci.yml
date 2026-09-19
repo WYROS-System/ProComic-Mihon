@@ -30,7 +30,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-          cache: gradle
 
       - name: Clone pinned upstream
         run: git clone --depth 1 --branch "\${{ env.UPSTREAM_TAG }}" "\${{ env.UPSTREAM_REPO }}" upstream
