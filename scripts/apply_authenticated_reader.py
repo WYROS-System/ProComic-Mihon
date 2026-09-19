@@ -23,7 +23,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
-import keiyoushi.utils.applicationContext
 
 data class ProComicBrowserReaderResult(
     val imageUrls: List<String>,
@@ -53,7 +52,16 @@ object ProComicBrowserReader {
             "ProComicBrowserReader.load must not run on the main thread"
         }
 
-        val application = applicationContext
+        val application = ProComic.applicationContext ?: runCatching {
+            val activityThread = Class.forName("android.app.ActivityThread")
+            val method = activityThread.getMethod("currentApplication")
+            method.invoke(null) as? android.content.Context
+        }.getOrNull() ?: return ProComicBrowserReaderResult(
+            emptyList(),
+            "",
+            "No Android application context available",
+            null,
+        )
         val latch = CountDownLatch(1)
         val result = AtomicReference<ProComicBrowserReaderResult?>()
         val finished = AtomicBoolean(false)
@@ -297,6 +305,14 @@ internal data class ProComicWebViewFetchResult(
 
 internal object ProComicWebViewFetcher {
     private const val TIMEOUT_MS = 30_000L
+
+    private fun resolveContext(): android.content.Context {
+        return ProComic.applicationContext ?: runCatching {
+            val activityThread = Class.forName("android.app.ActivityThread")
+            val method = activityThread.getMethod("currentApplication")
+            method.invoke(null) as? android.content.Context
+        }.getOrNull() ?: throw IllegalStateException("No Android application context available")
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var webView: WebView? = null
