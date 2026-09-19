@@ -11,7 +11,6 @@ BROWSER = ROOT_REL / "ProComicBrowserReader.kt"
 BROWSER_SOURCE = r'''package eu.kanade.tachiyomi.extension.ar.procomic
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -24,6 +23,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import keiyoushi.utils.applicationContext
 
 data class ProComicBrowserReaderResult(
     val imageUrls: List<String>,
@@ -36,12 +36,6 @@ object ProComicBrowserReader {
 
     private const val TIMEOUT_SECONDS = 30L
     private const val POLL_MS = 600L
-
-    private fun resolveContext(): Context? = ProComic.applicationContext ?: runCatching {
-        val activityThreadClass = Class.forName("android.app.ActivityThread")
-        val method = activityThreadClass.getMethod("currentApplication")
-        method.invoke(null) as? Context
-    }.getOrNull()
 
     private val hosts = setOf(
         "app.procomic.pro", "app.procomic.net",
@@ -59,12 +53,7 @@ object ProComicBrowserReader {
             "ProComicBrowserReader.load must not run on the main thread"
         }
 
-        val application = resolveContext() ?: return ProComicBrowserReaderResult(
-            emptyList(),
-            "",
-            "No Android application context available",
-            null,
-        )
+        val application = applicationContext
         val latch = CountDownLatch(1)
         val result = AtomicReference<ProComicBrowserReaderResult?>()
         val finished = AtomicBoolean(false)
@@ -237,6 +226,199 @@ object ProComicBrowserReader {
 }
 '''
 
+CLIENT_ANCHOR = '''        override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(ProComicImageInterceptor(network.client))
+        .build()
+'''
+CLIENT_REPLACEMENT = '''        override val client: OkHttpClient = network.client.newBuilder()
+        .addInterceptor(ProComicImageInterceptor(network.client))
+        .addInterceptor(ProComicWebViewImageInterceptor())
+        .build()
+'''
+
+IMAGE_INTERCEPTOR_SOURCE = r'''package eu.kanade.tachiyomi.extension.ar.procomic
+
+import android.annotation.SuppressLint
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+
+class ProComicWebViewImageInterceptor : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+        if (!ProComicUtils.isAllowedPageImageUrl(request.url.toString()) ||
+            response.code !in setOf(401, 403)
+        ) {
+            return response
+        }
+        response.close()
+
+        val fetched = ProComicWebViewFetcher.fetch(
+            url = request.url.toString(),
+            referer = request.header("Referer"),
+        ) ?: throw IOException("ProComic Reader: authenticated WebView image fetch failed")
+
+        if (fetched.status !in 200..299) {
+            throw IOException("ProComic Reader: authenticated WebView image fetch failed (" + fetched.status + ")")
+        }
+
+        val bytes = Base64.decode(fetched.body, Base64.DEFAULT)
+        val mediaType = fetched.contentType?.toMediaTypeOrNull()
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .header("Content-Type", mediaType?.toString() ?: "image/*")
+            .body(bytes.toResponseBody(mediaType))
+            .build()
+    }
+}
+
+internal data class ProComicWebViewFetchResult(
+    val status: Int,
+    val contentType: String?,
+    val body: String,
+)
+
+internal object ProComicWebViewFetcher {
+    private const val TIMEOUT_MS = 30_000L
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private var webView: WebView? = null
+    private val bridge = Bridge()
+
+    fun fetch(url: String, referer: String?): ProComicWebViewFetchResult? {
+        val latch = CountDownLatch(1)
+        val result = AtomicReference<ProComicWebViewFetchResult?>()
+        bridge.reset(latch, result)
+
+        mainHandler.post {
+            val parsed = runCatching { java.net.URI(url) }.getOrNull()
+            val host = parsed?.host ?: return@post
+            val scheme = parsed.scheme ?: "https"
+            val origin = scheme + "://" + host + "/"
+            val view = getWebView()
+
+            view.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, pageUrl: String?) {
+                    val target = org.json.JSONObject.quote(url)
+                    val ref = org.json.JSONObject.quote(referer ?: "")
+                    val script =
+                        "fetch(" + target + ",{" +
+                            "method:'GET'," +
+                            "credentials:'include'," +
+                            "cache:'no-store'," +
+                            "referrer:" + ref + "," +
+                            "referrerPolicy:'strict-origin-when-cross-origin'" +
+                        "}).then(async function(response) {" +
+                            "var blob=await response.blob();" +
+                            "var reader=new FileReader();" +
+                            "reader.onloadend=function(){" +
+                                "var value=String(reader.result||'');" +
+                                "var comma=value.indexOf(',');" +
+                                "window.ProComicWebViewBridge.finish(" +
+                                    "response.status," +
+                                    "(response.headers.get('content-type')||'')," +
+                                    "(comma>=0?value.substring(comma+1):'')" +
+                                ");" +
+                            "};" +
+                            "reader.readAsDataURL(blob);" +
+                        "}).catch(function(error){" +
+                            "window.ProComicWebViewBridge.fail(String(error));" +
+                        "});"
+                    view.evaluateJavascript(script, null)
+                }
+            }
+
+            CookieManager.getInstance().setAcceptCookie(true)
+            runCatching { CookieManager.getInstance().flush() }
+
+            view.loadDataWithBaseURL(
+                origin,
+                "<html><head><meta charset='utf-8'></head><body></body></html>",
+                "text/html",
+                "UTF-8",
+                null,
+            )
+        }
+
+        return if (latch.await(TIMEOUT_MS, TimeUnit.MILLISECONDS)) result.get() else null
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun getWebView(): WebView {
+        webView?.let { return it }
+
+        return WebView(keiyoushi.utils.applicationContext).also { view ->
+            view.settings.javaScriptEnabled = true
+            view.settings.domStorageEnabled = true
+            view.settings.databaseEnabled = true
+            CookieManager.getInstance().setAcceptCookie(true)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
+            }
+            view.addJavascriptInterface(
+                object {
+                    @JavascriptInterface
+                    fun finish(status: Int, contentType: String, body: String) {
+                        bridge.finish(status, contentType, body)
+                    }
+
+                    @JavascriptInterface
+                    fun fail(message: String) {
+                        bridge.fail(message)
+                    }
+                },
+                "ProComicWebViewBridge",
+            )
+            webView = view
+        }
+    }
+
+    private class Bridge {
+        private var latch: CountDownLatch? = null
+        private var result: AtomicReference<ProComicWebViewFetchResult?>? = null
+
+        fun reset(
+            latch: CountDownLatch,
+            result: AtomicReference<ProComicWebViewFetchResult?>,
+        ) {
+            this.latch = latch
+            this.result = result
+        }
+
+        fun finish(status: Int, contentType: String, body: String) {
+            result?.set(
+                ProComicWebViewFetchResult(status, contentType.ifBlank { null }, body),
+            )
+            latch?.countDown()
+        }
+
+        fun fail(message: String) {
+            result?.set(ProComicWebViewFetchResult(599, "text/plain", message.take(512)))
+            latch?.countDown()
+        }
+    }
+}
+
+'''
+
+
 def replace_once(path: Path, old: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
     if text.count(old) != 1:
@@ -250,6 +432,7 @@ def apply(root: Path) -> None:
     if not pro.is_file():
         raise SystemExit(f"missing {pro}")
 
+    replace_once(pro, CLIENT_ANCHOR, CLIENT_REPLACEMENT)
     pro_text = pro.read_text(encoding="utf-8")
     reader_start = (
         "        val (body, url, activeHost) = if (initialHasImages && !initialRedirectedAway) {"
@@ -315,6 +498,8 @@ def apply(root: Path) -> None:
         replace_once(pro, reader_request_old, reader_request_new)
 
     browser.write_text(BROWSER_SOURCE, encoding="utf-8")
+    image_interceptor = pro.parent / "ProComicWebViewImageInterceptor.kt"
+    image_interceptor.write_text(IMAGE_INTERCEPTOR_SOURCE, encoding="utf-8")
 
 def main() -> None:
     parser = argparse.ArgumentParser()
