@@ -642,15 +642,6 @@ SESSION = ROOT_REL / "ProComicBrowserSession.kt"
 IMAGE_INTERCEPTOR = ROOT_REL / "ProComicWebViewImageInterceptor.kt"
 LEGACY_READER = ROOT_REL / "ProComicBrowserReader.kt"
 
-CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ProComicImageInterceptor(network.client))
-        .build()
-'''
-CLIENT_REPLACEMENT = '''    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ProComicImageInterceptor(network.client))
-        .addInterceptor(ProComicWebViewImageInterceptor())
-        .build()
-'''
 
 READER_FALLBACK_ANCHOR = r'''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
         val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
