@@ -531,10 +531,10 @@ CLIENT_REPLACEMENT = '''    override val client: OkHttpClient = network.client.n
         .build()
 '''
 
-READER_FALLBACK_ANCHOR = '''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
+READER_FALLBACK_ANCHOR = r'''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
         val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
 '''
-READER_FALLBACK_REPLACEMENT = '''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
+READER_FALLBACK_REPLACEMENT = r'''        val initialHasImages = initialBody.contains("appImages") || initialBody.contains("\\\"appImages\\\"")
         val initialRedirectedAway = !response.request.url.encodedPath.contains("/chapter/")
 
         val browserResult = if (
