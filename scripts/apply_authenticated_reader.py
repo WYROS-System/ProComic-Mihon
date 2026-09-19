@@ -240,7 +240,34 @@ def apply(root: Path) -> None:
     if not pro.is_file():
         raise SystemExit(f"missing {pro}")
 
-    page_anchor = '''        val publicImages = ProComicUtils.extractPageImages(body, "PAGES", url)
+    pro_text = pro.read_text(encoding="utf-8")
+    reader_start = """        val (body, url, activeHost) = if (initialHasImages && !initialRedirectedAway) {"""
+    if reader_start not in pro_text:
+        raise SystemExit("upstream Reader selection anchor not found")
+
+    reader_insertion = """        val browserResult = if (
+            initialBody.contains("Safe Browsing Required", ignoreCase = true) ||
+            initialBody.contains("Log in and disable Safe Browsing", ignoreCase = true) ||
+            initialBody.contains("هذا المحتوى مقيد", ignoreCase = true)
+        ) {
+            runCatching {
+                ProComicBrowserReader.load(initialUrl)
+            }.onFailure {
+                ProComicDiag.logException("PAGES", "authenticated browser Reader", initialUrl, it)
+            }.getOrNull()
+        } else {
+            null
+        }
+
+        val browserBody = browserResult?.contractText?.takeIf { it.isNotBlank() }
+        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {
+            val recoveredUrl = browserResult?.finalUrl ?: initialUrl
+            val recoveredHost = runCatching { java.net.URI(recoveredUrl).host }
+                .getOrNull()
+                ?: initialHost
+            ProComicDiag.logStage("PAGES", 15, "authenticated browser Reader contract recovered")
+            Triple(browserBody, recoveredUrl, recoveredHost)
+        } else     page_anchor = '''        val publicImages = ProComicUtils.extractPageImages(body, "PAGES", url)
         val pages = publicImages.mapIndexed { index, imageUrl ->
             Page(index, imageUrl = imageUrl)
         }.toMutableList()
