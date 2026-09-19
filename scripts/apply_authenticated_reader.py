@@ -260,7 +260,7 @@ def apply(root: Path) -> None:
         "            }.getOrNull()\n"
         "        } else {\n"
         "            null\n"
-        "\n"
+        "        }\n"
         "\n"
         "        val browserBody = browserResult?.contractText?.takeIf { it.isNotBlank() }\n"
         "        val (body, url, activeHost) = if (!browserBody.isNullOrBlank()) {\n"
