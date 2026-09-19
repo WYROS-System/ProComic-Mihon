@@ -6,7 +6,6 @@ from pathlib import Path
 
 ROOT_REL = Path("app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic")
 PRO = ROOT_REL / "ProComic.kt"
-BROWSER = ROOT_REL / "ProComicBrowserReader.kt"
 
 BROWSER_SESSION_SOURCE = r'''package eu.kanade.tachiyomi.extension.ar.procomic
 
@@ -82,11 +81,87 @@ internal object ProComicBrowserSession {
         accept: String = "application/json",
     ): ProComicBrowserFetchResult? = fetch(url, referer, accept, false)
 
+    fun fetchJsonPost(
+        url: String,
+        referer: String?,
+        jsonBody: String,
+    ): ProComicBrowserFetchResult? = fetchPost(url, referer, jsonBody)
+
     fun fetchBinary(
         url: String,
         referer: String?,
         accept: String = "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
     ): ProComicBrowserFetchResult? = fetch(url, referer, accept, true)
+
+    private fun fetchPost(
+        url: String,
+        referer: String?,
+        jsonBody: String,
+    ): ProComicBrowserFetchResult? {
+        require(Looper.myLooper() != Looper.getMainLooper())
+        validatePageUrl(url)
+        lock.lock()
+        try {
+            val latch = CountDownLatch(1)
+            val result = AtomicReference<ProComicBrowserFetchResult?>()
+            val completed = AtomicBoolean(false)
+            mainHandler.post {
+                val context = ProComic.applicationContext ?: runCatching {
+                    val activityThread = Class.forName("android.app.ActivityThread")
+                    val method = activityThread.getMethod("currentApplication")
+                    method.invoke(null) as? android.content.Context
+                }.getOrNull() ?: run {
+                    latch.countDown()
+                    return@post
+                }
+                val view = WebView(context)
+                val handler = Handler(Looper.getMainLooper())
+                val parsed = URI(url)
+                val origin = parsed.scheme + "://" + (parsed.rawAuthority ?: parsed.host) + "/"
+                val target = org.json.JSONObject.quote(url)
+                val ref = if (referer.isNullOrBlank()) "undefined" else org.json.JSONObject.quote(referer)
+                val body = org.json.JSONObject.quote(jsonBody)
+                fun finish(value: ProComicBrowserFetchResult) {
+                    if (!completed.compareAndSet(false, true)) return
+                    result.set(value)
+                    handler.removeCallbacksAndMessages(null)
+                    runCatching { view.stopLoading() }
+                    runCatching { view.destroy() }
+                    latch.countDown()
+                }
+                val bridge = object {
+                    @JavascriptInterface
+                    fun text(status: Int, contentType: String, responseBody: String) {
+                        handler.post { finish(ProComicBrowserFetchResult(status, contentType.ifBlank { null }, responseBody, null)) }
+                    }
+                    @JavascriptInterface
+                    fun fail(message: String) {
+                        handler.post { finish(ProComicBrowserFetchResult(599, "text/plain", message.take(512), null)) }
+                    }
+                }
+                configureWebView(view, null)
+                view.addJavascriptInterface(bridge, "ProComicBrowserBridge")
+                view.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, finishedUrl: String?) {
+                        val script =
+                            "(async function(){try{const response=await fetch(" + target +
+                            ",{method:'POST',credentials:'include',cache:'no-store',referrer:" + ref +
+                            ",referrerPolicy:'strict-origin-when-cross-origin',headers:{'Accept':'application/json','Content-Type':'application/json','Accept-Language':'ar,en;q=0.9'},body:" + body +
+                            "});response.text().then(function(t){window.ProComicBrowserBridge.text(response.status,response.headers.get('content-type') || '',t);}).catch(function(e){window.ProComicBrowserBridge.fail(String(e));});}catch(e){window.ProComicBrowserBridge.fail(String(e));}})()"
+                        view.evaluateJavascript(script, null)
+                    }
+                }
+                view.webChromeClient = WebChromeClient()
+                view.loadDataWithBaseURL(origin, "<html><head><meta charset='utf-8'></head><body></body></html>", "text/html", "UTF-8", null)
+                handler.postDelayed({
+                    if (!completed.get()) finish(ProComicBrowserFetchResult(598, "text/plain", "Browser POST fetch timed out", null))
+                }, FETCH_TIMEOUT_MS)
+            }
+            return if (latch.await(FETCH_TIMEOUT_MS + 5_000L, TimeUnit.MILLISECONDS)) result.get() else null
+        } finally {
+            lock.unlock()
+        }
+    }
 
     private fun fetch(
         url: String,
@@ -462,9 +537,14 @@ CLIENT_ANCHOR = '''    override val client: OkHttpClient = network.client.newBui
         .addInterceptor(ProComicImageInterceptor(network.client))
         .build()
 '''
-CLIENT_REPLACEMENT = '''    override val client: OkHttpClient = network.client.newBuilder()
-        .addInterceptor(ProComicImageInterceptor(network.client))
-        .addInterceptor(ProComicWebViewImageInterceptor())
+CLIENT_REPLACEMENT = '''    private val browserNetworkClient: OkHttpClient by lazy {
+        network.client.newBuilder()
+            .addInterceptor(ProComicWebViewImageInterceptor())
+            .build()
+    }
+
+    override val client: OkHttpClient = browserNetworkClient.newBuilder()
+        .addInterceptor(ProComicImageInterceptor(browserNetworkClient))
         .build()
 '''
 
@@ -476,43 +556,84 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
 
 class ProComicWebViewImageInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        if (!ProComicUtils.isAllowedPageImageUrl(request.url.toString()) ||
-            response.code !in setOf(401, 403)
-        ) return response
 
-        response.close()
-        val fetched = ProComicBrowserSession.fetchBinary(
-            request.url.toString(),
-            request.header("Referer"),
-        ) ?: throw IOException("ProComic Reader: authenticated WebView image fetch timed out")
-
-        if (fetched.status !in 200..299 || fetched.base64Body.isNullOrBlank()) {
-            throw IOException(
-                "ProComic Reader: authenticated WebView image fetch failed (" +
-                    fetched.status + ")",
-            )
+        if (response.code !in setOf(401, 403)) {
+            return response
         }
 
-        val bytes = try {
-            android.util.Base64.decode(fetched.base64Body, android.util.Base64.DEFAULT)
-        } catch (e: IllegalArgumentException) {
-            throw IOException("ProComic Reader: WebView image response was not valid base64", e)
+        if (ProComicUtils.isAllowedPageImageUrl(request.url.toString()) ||
+            ProComicUtils.isAllowedProtectedTileUrl(request.url.toString())
+        ) {
+            response.close()
+            val fetched = ProComicBrowserSession.fetchBinary(
+                request.url.toString(),
+                request.header("Referer"),
+            ) ?: throw IOException("ProComic Reader: authenticated WebView image fetch timed out")
+
+            if (fetched.status !in 200..299 || fetched.base64Body.isNullOrBlank()) {
+                throw IOException(
+                    "ProComic Reader: authenticated WebView image fetch failed (" +
+                        fetched.status + ")",
+                )
+            }
+
+            val bytes = try {
+                android.util.Base64.decode(fetched.base64Body, android.util.Base64.DEFAULT)
+            } catch (e: IllegalArgumentException) {
+                throw IOException("ProComic Reader: WebView image response was not valid base64", e)
+            }
+
+            val mediaType = fetched.contentType?.toMediaTypeOrNull()
+            return Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("Content-Type", mediaType?.toString() ?: "image/*")
+                .body(bytes.toResponseBody(mediaType))
+                .build()
         }
 
-        val mediaType = fetched.contentType?.toMediaTypeOrNull()
-        return Response.Builder()
-            .request(request)
-            .protocol(Protocol.HTTP_1_1)
-            .code(200)
-            .message("OK")
-            .header("Content-Type", mediaType?.toString() ?: "image/*")
-            .body(bytes.toResponseBody(mediaType))
-            .build()
+        if (request.method == "POST" &&
+            request.url.pathSegments.firstOrNull() == "chapter-map-proxy-plan"
+        ) {
+            val requestBody = request.body ?: return response
+            val buffer = Buffer()
+            requestBody.writeTo(buffer)
+            val jsonBody = buffer.readUtf8()
+            response.close()
+
+            val fetched = ProComicBrowserSession.fetchJsonPost(
+                url = request.url.toString(),
+                referer = request.header("Referer"),
+                jsonBody = jsonBody,
+            ) ?: throw IOException("ProComic Reader: authenticated WebView map request timed out")
+
+            if (fetched.status !in 200..299 || fetched.textBody.isNullOrBlank()) {
+                throw IOException(
+                    "ProComic Reader: authenticated WebView map request failed (" +
+                        fetched.status + ")",
+                )
+            }
+
+            val mediaType = fetched.contentType?.toMediaTypeOrNull()
+            return Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .header("Content-Type", mediaType?.toString() ?: "application/json")
+                .body(fetched.textBody!!.toResponseBody(mediaType))
+                .build()
+        }
+
+        return response
     }
 }
 '''
