@@ -54,12 +54,17 @@ object ProComicBrowserReader {
     private val imageExtensions = setOf("avif", "webp", "jpg", "jpeg", "png")
 
     @SuppressLint("SetJavaScriptEnabled")
-    fun load(url: String, requiredImageCount: Int): ProComicBrowserReaderResult {
+    fun load(url: String, requiredImageCount: Int = 4): ProComicBrowserReaderResult {
         check(Looper.myLooper() != Looper.getMainLooper()) {
             "ProComicBrowserReader.load must not run on the main thread"
         }
 
-        val application = resolveContext() ?: return ProComicBrowserReaderResult(emptyList(), "", "No Android application context available")
+        val application = resolveContext() ?: return ProComicBrowserReaderResult(
+            emptyList(),
+            "",
+            "No Android application context available",
+            null,
+        )
         val latch = CountDownLatch(1)
         val result = AtomicReference<ProComicBrowserReaderResult?>()
         val finished = AtomicBoolean(false)
