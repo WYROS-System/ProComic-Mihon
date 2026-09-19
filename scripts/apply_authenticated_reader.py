@@ -735,9 +735,13 @@ DEFERRED_SOURCE = '''    private fun fetchDeferredMedia(
                             referer = referer,
                             accept = "application/json",
                         )
-                        if (browser?.status in 200..299 && !browser.textBody.isNullOrBlank()) {
+                        val browserBody = browser
+                            ?.takeIf { it.status in 200..299 }
+                            ?.textBody
+                            ?.takeIf { it.isNotBlank() }
+                        if (browserBody != null) {
                             val parsed = ProComicUtils.json.decodeFromString<ProComicDeferredMediaResponse>(
-                                browser.textBody!!,
+                                browserBody,
                             )
                             if (parsed.success == false) {
                                 throw Exception("ProComic Reader: deferred media browser response returned success=false")
