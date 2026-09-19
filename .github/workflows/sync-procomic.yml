@@ -1,4 +1,4 @@
-name: Build ProComic authenticated Reader
+name: Publish authenticated ProComic
 
 on:
   push:
@@ -9,14 +9,30 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: procomic-publish
+  cancel-in-progress: true
+
+env:
+  UPSTREAM_REPO: https://github.com/LoneVertex/mihon-extension-ar-procomic.git
+  UPSTREAM_TAG: v1.5.1
+  PACKAGE: eu.kanade.tachiyomi.extension.ar.procomic
+  VERSION_CODE: "12"
+  VERSION_NAME: "1.5.6"
+  APK_NAME: procomic-wyros-v1.5.6.apk
+  SOURCE_ID: "6818345659309721544"
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -25,17 +41,187 @@ jobs:
           java-version: "21"
 
       - name: Clone verified upstream
-        run: git clone --depth 1 --branch v1.5.1 https://github.com/LoneVertex/mihon-extension-ar-procomic.git upstream
+        run: git clone --depth 1 --branch "${UPSTREAM_TAG}" "${UPSTREAM_REPO}" upstream
 
-      - name: Apply authenticated browser Reader patch
+      - name: Apply authenticated Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
+
+      - name: Set release metadata
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle.kts")
+          s = p.read_text()
+          s = s.replace('versionCode = 7', 'versionCode = 12', 1)
+          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.6"', 1)
+          p.write_text(s)
+          PY
 
       - name: Build release APK
         working-directory: upstream
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify APK
+      - name: Sign and publish manifest
+        env:
+          APKTOOL_APK: upstream/app/build/outputs/apk/release/app-release-unsigned.apk
         run: |
           set -euo pipefail
-          test -s upstream/app/build/outputs/apk/release/app-release-unsigned.apk
-          stat -c "%n %s bytes" upstream/app/build/outputs/apk/release/app-release-unsigned.apk
+
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -1)"
+          test -x "$AAPT2"
+          test -x "$APKSIGNER"
+          test -x "$ZIPALIGN"
+
+          KS="$(mktemp --suffix=.jks)"
+          PASS="$(openssl rand -hex 32)"
+
+          keytool -genkeypair -v             -keystore "$KS"             -storepass "$PASS"             -keypass "$PASS"             -alias wyros             -keyalg RSA             -keysize 4096             -validity 10000             -dname "CN=WYROS ProComic,O=WYROS,C=EG"
+
+          mkdir -p apk
+          find apk -type f -delete
+          "$ZIPALIGN" -f -p 4 "$APKTOOL_APK" /tmp/aligned.apk
+
+          "$APKSIGNER" sign             --ks "$KS"             --ks-key-alias wyros             --ks-pass "pass:$PASS"             --key-pass "pass:$PASS"             --out "apk/$APK_NAME"             /tmp/aligned.apk
+
+          "$APKSIGNER" verify --verbose --print-certs "apk/$APK_NAME"
+
+          BADGING="$("$AAPT2" dump badging "apk/$APK_NAME")"
+          echo "$BADGING" | grep -q "package: name='$PACKAGE'"
+          echo "$BADGING" | grep -q "versionCode='$VERSION_CODE'"
+          echo "$BADGING" | grep -q "versionName='$VERSION_NAME'"
+
+          keytool -exportcert -rfc             -keystore "$KS"             -storepass "$PASS"             -alias wyros > /tmp/wyros-cert.pem
+
+          FINGERPRINT="$(
+            openssl x509 -in /tmp/wyros-cert.pem -outform DER |
+              openssl dgst -sha256 -binary |
+              xxd -p -c 256
+          )"
+          test "${#FINGERPRINT}" -eq 64
+          echo "signing fingerprint: $FINGERPRINT"
+
+          APK_SHA256="$(sha256sum "apk/$APK_NAME" | cut -d' ' -f1)"
+
+          cat > index.min.json <<EOF
+          [{"name":"ProComic","pkg":"$PACKAGE","apk":"https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/$APK_NAME","lang":"ar","code":$VERSION_CODE,"version":"$VERSION_NAME","nsfw":0}]
+          EOF
+
+          cat > repo.json <<EOF
+          {
+            "index_v2": "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/index.pb",
+            "meta": {
+              "name": "WYROS ProComic",
+              "shortName": "WYROS",
+              "website": "https://github.com/WYROS-System/ProComic-Mihon",
+              "signingKeyFingerprint": "$FINGERPRINT"
+            }
+          }
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import gzip
+          import json
+          import os
+
+          def varint(n: int) -> bytes:
+              out = bytearray()
+              while n >= 0x80:
+                  out.append((n & 0x7f) | 0x80)
+                  n >>= 7
+              out.append(n)
+              return bytes(out)
+
+          def scalar(num: int, value: int) -> bytes:
+              return varint((num << 3) | 0) + varint(value)
+
+          def text(num: int, value: str) -> bytes:
+              raw = value.encode()
+              return varint((num << 3) | 2) + varint(len(raw)) + raw
+
+          def msg(num: int, value: bytes) -> bytes:
+              return varint((num << 3) | 2) + varint(len(value)) + value
+
+          package = os.environ["PACKAGE"]
+          version_code = int(os.environ["VERSION_CODE"])
+          version_name = os.environ["VERSION_NAME"]
+          apk_name = os.environ["APK_NAME"]
+          source_id = int(os.environ["SOURCE_ID"])
+
+          # Read fingerprint produced by the signing step.
+          repo = json.loads(Path("repo.json").read_text())
+          fingerprint = repo["meta"]["signingKeyFingerprint"]
+
+          resources = (
+              text(1, f"https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/apk/{apk_name}") +
+              text(2, "https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/icon/eu.kanade.tachiyomi.extension.ar.procomic.png")
+          )
+
+          source = (
+              scalar(1, source_id) +
+              text(2, "ProComic") +
+              text(3, "ar") +
+              text(4, "https://procomic.pro")
+          )
+
+          extension = (
+              text(1, "ProComic") +
+              text(2, package) +
+              msg(3, resources) +
+              text(4, "1.6") +
+              scalar(5, version_code) +
+              text(6, version_name) +
+              scalar(7, 1) +
+              msg(8, source)
+          )
+
+          extension_list = msg(1, extension)
+          contact = text(1, "https://github.com/WYROS-System/ProComic-Mihon")
+          index = (
+              text(1, "WYROS ProComic") +
+              text(2, "WYROS") +
+              text(3, fingerprint) +
+              msg(4, contact) +
+              msg(101, extension_list)
+          )
+
+          Path("index.pb").write_bytes(index)
+          PY
+
+          cat > publication.txt <<EOF
+          package=$PACKAGE
+          versionCode=$VERSION_CODE
+          versionName=$VERSION_NAME
+          apk=$APK_NAME
+          sha256=$APK_SHA256
+          signingKeyFingerprint=$FINGERPRINT
+          EOF
+
+          rm -f "$KS" /tmp/wyros-cert.pem /tmp/aligned.apk
+
+      - name: Verify published tree
+        run: |
+          set -euo pipefail
+          test -s "apk/$APK_NAME"
+          test -s index.pb
+          grep -q "\"index_v2\"" repo.json
+          grep -q "\"$VERSION_NAME\"" index.min.json
+          grep -q "signingKeyFingerprint" repo.json
+          git status --short
+
+      - name: Commit publication
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apk index.pb index.min.json repo.json publication.txt
+          if git diff --cached --quiet; then
+            echo "No publication changes."
+            exit 0
+          fi
+          git commit -m "release: ProComic $VERSION_NAME authenticated Reader"
+          git push origin HEAD:main
