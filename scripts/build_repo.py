@@ -63,9 +63,9 @@ def extension_message(version_code, version_name, apk_name, fingerprint):
 
 
 
-PATCHED_VERSION_CODE = 10
-PATCHED_VERSION_NAME = "1.5.4"
-PATCHED_APK_NAME = "procomic-wyros-v1.5.4.apk"
+PATCHED_VERSION_CODE = 11
+PATCHED_VERSION_NAME = "1.5.5"
+PATCHED_APK_NAME = "procomic-wyros-v1.5.5.apk"
 UPSTREAM_REPO = "https://github.com/LoneVertex/mihon-extension-ar-procomic.git"
 
 
@@ -103,8 +103,8 @@ def _set_version(source_root):
     text = gradle_file.read_text(encoding="utf-8")
     if "versionCode = 7" not in text or 'versionName = "1.5.1"' not in text:
         raise SystemExit("unexpected upstream version baseline; refusing automatic patch build")
-    text = text.replace("versionCode = 7", "versionCode = 10", 1)
-    text = text.replace('versionName = "1.5.1"', 'versionName = "1.5.4"', 1)
+    text = text.replace("versionCode = 7", "versionCode = 11", 1)
+    text = text.replace('versionName = "1.5.1"', 'versionName = "1.5.5"', 1)
     gradle_file.write_text(text, encoding="utf-8")
 
 
@@ -118,6 +118,10 @@ def _build_patched_apk():
         )
         subprocess.run(
             ["python3", str(ROOT / "scripts" / "apply_reader_hotfix.py"), str(source_root)],
+            check=True,
+        )
+        subprocess.run(
+            ["python3", str(ROOT / "scripts" / "apply_procomic_auth.py"), str(source_root)],
             check=True,
         )
         _set_version(source_root)
@@ -231,7 +235,7 @@ def maybe_prepare_patched_release(upstream_version_code, upstream_version_name):
     if upstream_version_code >= PATCHED_VERSION_CODE:
         return upstream_version_code, upstream_version_name, None, None
 
-    print("Upstream is older than the WYROS Reader hotfix release; building ProComic 1.5.4.")
+    print("Upstream is older than the WYROS Reader hotfix release; building ProComic 1.5.5.")
     for stale in (ROOT / "apk").glob("*.apk"):
         stale.unlink()
     fingerprint, sha256 = _build_patched_apk()
