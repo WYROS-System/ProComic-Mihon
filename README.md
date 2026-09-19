@@ -1,16 +1,28 @@
 # ProComic Mihon Repository
 
-Clean, isolated distribution repository for the Arabic ProComic Mihon extension.
+Isolated distribution repository for the Arabic ProComic Mihon extension.
 
-## Current release
+## Published release
 
 **ProComic 1.5.6 — versionCode 12**
 
-This release includes an authenticated Reader fallback that uses a real Android WebView session. When the normal Reader request is denied or returns the site's Safe Browsing/login gate, the extension loads the same chapter in a WebView with JavaScript, DOM storage, cookies, and the site's normal browser session, then extracts the chapter media contract.
+The APK currently published under `main` is the legacy 1.5.6 custom build.
 
-Image requests that receive HTTP 401/403 also have a browser-session fallback.
+The authenticated Reader implementation in this repository has since been redesigned on a separate development branch and must not be described as runtime-verified until an Android test confirms the real ProComic account/session flow.
 
-The implementation does not bypass payment, entitlement, login, or server-side authorization. The ProComic account must legitimately have access to the chapter, and any Safe Browsing preference required by ProComic must be changed through the site's own account/settings flow.
+## Development Reader architecture
+
+The development implementation:
+
+- keeps the exact ProComic `.pro` / `.net` origin instead of forcing a domain rewrite;
+- uses an Android WebView in Mihon's main process/default WebView profile;
+- preserves the normal CookieManager and Web Storage state without fabricating cookies or tokens;
+- distinguishes Safe Browsing, login-required, and premium/server-entitlement states;
+- keeps the upstream Reader parser and protected tile validation;
+- can fall back to browser context for denied deferred-media, protected-map, image, and tile requests;
+- does not bypass payment, entitlement, Safe Browsing, login, or other server-side authorization.
+
+The account itself must legitimately have permission to read the requested chapter.
 
 ## Add to Mihon
 
@@ -20,12 +32,14 @@ https://raw.githubusercontent.com/WYROS-System/ProComic-Mihon/main/repo.json
 
 ## Source and upstream
 
-Source: https://procomic.net/
+Source: https://procomic.pro/
 
 Upstream implementation: https://github.com/LoneVertex/mihon-extension-ar-procomic
 
+The pinned release baseline for the current development pipeline is upstream `v1.5.1`.
+
 ## Signing
 
-The published WYROS APK is signed with the certificate fingerprint stored in repo.json.
+The legacy 1.5.6 APK was produced with a temporary signing identity.
 
-The current release was intentionally published as a self-contained custom build. The signing key is not stored in this public repository. Future custom releases need to reuse a persistent private signing key to preserve seamless Android updates.
+The release pipeline now requires a persistent keystore and a separately pinned certificate fingerprint before publishing a new distributable version. This is required to prevent accidental signing-identity changes between releases.
