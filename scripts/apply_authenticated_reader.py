@@ -275,6 +275,26 @@ internal object ProComicBrowserSession {
                       try {
                         if (typeof window.__SAFE_BROWSING === "boolean") windowSafe = window.__SAFE_BROWSING;
                       } catch (_) {}
+
+                      let cookieSafe = null;
+                      let hasOrySession = false;
+                      try {
+                        const cookies = String(document.cookie || "")
+                          .split(";")
+                          .map(v => v.trim())
+                          .filter(Boolean);
+                        for (const item of cookies) {
+                          const sep = item.indexOf("=");
+                          const key = sep >= 0 ? item.slice(0, sep).trim() : item.trim();
+                          const value = sep >= 0 ? item.slice(sep + 1).trim().toLowerCase() : "";
+                          if (key === "ory_kratos_session") hasOrySession = true;
+                          if (key === "safe_browsing") {
+                            if (["false","0","off","disabled","no"].includes(value)) cookieSafe = false;
+                            if (["true","1","on","enabled","yes"].includes(value)) cookieSafe = true;
+                          }
+                        }
+                      } catch (_) {}
+
                       return JSON.stringify({
                         contract,
                         safe: /Safe Browsing Required|Log in and disable Safe Browsing|التصفح الآمن/i.test(body),
@@ -282,6 +302,8 @@ internal object ProComicBrowserSession {
                         login: /please log in|you must log in|سجل الدخول لقراءة|تسجيل الدخول لقراءة|هذا المحتوى مقيد/i.test(body),
                         localSafe,
                         windowSafe,
+                        cookieSafe,
+                        hasOrySession,
                         ready: document.readyState === "complete"
                       });
                     })()
@@ -317,6 +339,7 @@ internal object ProComicBrowserSession {
                         val safeState = when {
                             !json.isNull("windowSafe") -> json.optBoolean("windowSafe")
                             !json.isNull("localSafe") -> json.optBoolean("localSafe")
+                            !json.isNull("cookieSafe") -> json.optBoolean("cookieSafe")
                             else -> null
                         }
                         finish(
@@ -324,7 +347,16 @@ internal object ProComicBrowserSession {
                                 contractText = contract,
                                 blockedReason = blocked,
                                 finalUrl = webView.url,
-                                stateSummary = summarizeState(webView.url, safeState),
+                                stateSummary = summarizeState(
+                                    webView.url,
+                                    safeState,
+                                    json.optBoolean("hasOrySession", false),
+                                    if (!json.isNull("cookieSafe")) {
+                                        json.optBoolean("cookieSafe").toString()
+                                    } else {
+                                        "unknown"
+                                    },
+                                ),
                             ),
                         )
                     } else {
@@ -349,7 +381,12 @@ internal object ProComicBrowserSession {
                             contractText = "",
                             blockedReason = "Authenticated Reader WebView timed out",
                             finalUrl = webView.url,
-                            stateSummary = summarizeState(webView.url, null),
+                            stateSummary = summarizeState(
+                                webView.url,
+                                null,
+                                false,
+                                "unknown",
+                            ),
                         ),
                     )
                 }
@@ -513,7 +550,12 @@ internal object ProComicBrowserSession {
         }
     }
 
-    private fun summarizeState(url: String?, safeBrowsing: Boolean?): String {
+    private fun summarizeState(
+        url: String?,
+        safeBrowsing: Boolean?,
+        hasOrySession: Boolean,
+        cookieSafeBrowsing: String,
+    ): String {
         val cm = CookieManager.getInstance()
         val pro = cookieNames(cm.getCookie("https://procomic.pro/"))
         val net = cookieNames(cm.getCookie("https://procomic.net/"))
@@ -523,7 +565,9 @@ internal object ProComicBrowserSession {
         return "finalUrl=" + (url ?: "null") +
             "; proSessionCookies=" + authNames(pro) +
             "; netSessionCookies=" + authNames(net) +
-            "; safeBrowsingState=" + (safeBrowsing?.toString() ?: "unknown")
+            "; orySessionInDocumentCookie=" + hasOrySession +
+            "; safeBrowsingState=" + (safeBrowsing?.toString() ?: "unknown") +
+            "; safeBrowsingCookieState=" + cookieSafeBrowsing
     }
 
     private fun cookieNames(raw: String?): List<String> = raw.orEmpty()
