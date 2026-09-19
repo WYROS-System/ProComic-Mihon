@@ -821,9 +821,7 @@ def apply(root: Path) -> None:
         pro_text,
         DEFERRED_SIGNATURE,
         DEFERRED_SOURCE,
-        "
-
-    // ---- Image URL ----",
+        "\n\n    // ---- Image URL ----",
     )
 
     reader_request_old = '''        val readerHeaders = headersBuilder()
