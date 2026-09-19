@@ -73,6 +73,7 @@ def apply(root: Path) -> None:
     base = root / "app/src/main/kotlin/eu/kanade/tachiyomi/extension/ar/procomic"
     pro = base / "ProComic.kt"
     interceptor = base / "ProComicImageInterceptor.kt"
+    auth = base / "ProComicWebViewAuth.kt"
     if not pro.is_file() or not interceptor.is_file():
         raise SystemExit("expected ProComic source files are missing")
 
