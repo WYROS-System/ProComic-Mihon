@@ -32,16 +32,22 @@ jobs:
           java-version: "21"
 
       - name: Validate patcher syntax
-        run: python3 -m py_compile scripts/apply_authenticated_reader.py scripts/test_authenticated_reader_patch.py
+        run: python3 -m py_compile scripts/apply_authenticated_reader.py scripts/test_authenticated_reader_patch.py scripts/test_komikku_compatibility.py
 
       - name: Clone pinned upstream
         run: git clone --depth 1 --branch "${{ env.UPSTREAM_TAG }}" "${{ env.UPSTREAM_REPO }}" upstream
+
+      - name: Clone current Komikku host
+        run: git clone --depth 1 https://github.com/komikku-app/komikku.git komikku
 
       - name: Apply production Reader patch
         run: python3 scripts/apply_authenticated_reader.py upstream
 
       - name: Run authenticated Reader contract tests
         run: python3 scripts/test_authenticated_reader_patch.py --upstream upstream
+
+      - name: Run Komikku compatibility checks
+        run: python3 scripts/test_komikku_compatibility.py --komikku komikku
 
       - name: Compile and package unsigned release
         working-directory: upstream
@@ -57,3 +63,38 @@ jobs:
           echo "$BADGING" | grep -q "package: name='eu.kanade.tachiyomi.extension.ar.procomic'"
           echo "$BADGING" | grep -q "versionCode='7'"
           echo "$BADGING" | grep -q "versionName='1.5.1'"
+
+      - name: Set installable test version
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle.kts")
+          s = p.read_text()
+          s = s.replace("versionCode = 7", "versionCode = 13", 1)
+          s = s.replace('versionName = "1.5.1"', 'versionName = "1.5.7"', 1)
+          p.write_text(s)
+          PY
+
+      - name: Build installable test APK
+        working-directory: upstream
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify test APK identity
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -1)"
+          BADGING="$("$AAPT2" dump badging app/build/outputs/apk/debug/app-debug.apk)"
+          echo "$BADGING"
+          echo "$BADGING" | grep -q "package: name='eu.kanade.tachiyomi.extension.ar.procomic'"
+          echo "$BADGING" | grep -q "versionCode='13'"
+          echo "$BADGING" | grep -q "versionName='1.5.7'"
+
+      - name: Upload installable test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: procomic-wyros-v1.5.7-komikku-test
+          path: upstream/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
